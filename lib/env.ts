@@ -13,6 +13,9 @@ const envSchema = z.object({
   STEAM_MARKET_CURRENCY: z.enum(["USD", "GBP", "EUR"]).default("USD"),
   // Shared secret the daily cron must present (Bearer token) to run the snapshot.
   CRON_SECRET: z.string().optional(),
+  // HMAC key used to sign the session cookie. Optional — falls back to
+  // STEAM_API_KEY (also a server secret) so sessions are signed out of the box.
+  SESSION_SECRET: z.string().optional(),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 })
 
