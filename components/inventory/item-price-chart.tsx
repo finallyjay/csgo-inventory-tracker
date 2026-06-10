@@ -8,6 +8,7 @@ import { surfaceCardVariants } from "@/components/ui/surface-card"
 import { DateRangeSelector } from "@/components/charts/date-range-selector"
 import { filterByRange, type DateRange } from "@/lib/date-range"
 import { formatPrice } from "@/lib/market"
+import { formatDay } from "@/lib/datetime"
 import type { ItemPricePoint } from "@/lib/types/api"
 
 function ChartTooltip({
@@ -23,7 +24,7 @@ function ChartTooltip({
   const p = payload[0].payload
   return (
     <div className="border-surface-4 bg-popover rounded-lg border px-3 py-2 text-xs shadow-lg">
-      <p className="text-muted-foreground">{p.snapshotDate}</p>
+      <p className="text-muted-foreground">{formatDay(p.snapshotDate)}</p>
       <p className="text-foreground text-sm">{formatPrice(p.price, currency)}</p>
     </div>
   )
@@ -81,6 +82,7 @@ export function ItemPriceChart({ points, currency }: { points: ItemPricePoint[];
                 tick={{ fontSize: 10 }}
                 stroke="currentColor"
                 className="text-muted-foreground"
+                tickFormatter={(d: string) => formatDay(d, { month: "short", day: "numeric" })}
               />
               <YAxis
                 tick={{ fontSize: 10 }}

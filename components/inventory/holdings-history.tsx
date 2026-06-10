@@ -9,6 +9,7 @@ import { surfaceCardVariants } from "@/components/ui/surface-card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { StickerBadge } from "@/components/inventory/sticker-badge"
 import { formatPrice } from "@/lib/market"
+import { formatDay } from "@/lib/datetime"
 import type { HoldingItem, InventoryHoldingsResponse } from "@/lib/types/api"
 
 function HoldingRow({ item, currency }: { item: HoldingItem; currency: string }) {
@@ -137,7 +138,7 @@ export function HoldingsHistory() {
             <SelectContent>
               {dates.map((d, idx) => (
                 <SelectItem key={d} value={d}>
-                  {d}
+                  {formatDay(d)}
                   {idx === 0 ? " (latest)" : ""}
                 </SelectItem>
               ))}

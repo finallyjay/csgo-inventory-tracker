@@ -8,6 +8,7 @@ import { surfaceCardVariants } from "@/components/ui/surface-card"
 import { EmptyState } from "@/components/ui/empty-state"
 import { toast } from "@/hooks/use-toast"
 import { formatPrice } from "@/lib/market"
+import { formatDay, formatDateTime } from "@/lib/datetime"
 import { filterByRange, type DateRange } from "@/lib/date-range"
 import { DateRangeSelector } from "@/components/charts/date-range-selector"
 import type { InventoryValueHistoryResponse, InventoryValueSnapshot } from "@/lib/types/api"
@@ -17,7 +18,7 @@ function ValueTooltip({ active, payload }: { active?: boolean; payload?: Array<{
   const p = payload[0].payload
   return (
     <div className="border-surface-4 bg-popover rounded-lg border px-3 py-2 text-xs shadow-lg">
-      <p className="text-muted-foreground">{p.date}</p>
+      <p className="text-muted-foreground">{formatDay(p.date)}</p>
       <p className="text-foreground text-sm">{formatPrice(p.value, p.currency)}</p>
     </div>
   )
@@ -87,7 +88,7 @@ export function InventoryValuePanel() {
           )}
           {latest && (
             <p className="text-muted-foreground text-2xs mt-1">
-              {latest.pricedItemCount} of {latest.itemCount} items priced · as of {latest.snapshotDate}
+              {latest.pricedItemCount} of {latest.itemCount} items priced · updated {formatDateTime(latest.computedAt)}
             </p>
           )}
         </div>
@@ -107,7 +108,13 @@ export function InventoryValuePanel() {
         {points.length >= 2 ? (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
-              <XAxis dataKey="date" tick={{ fontSize: 10 }} stroke="currentColor" className="text-muted-foreground" />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 10 }}
+                stroke="currentColor"
+                className="text-muted-foreground"
+                tickFormatter={(d: string) => formatDay(d, { month: "short", day: "numeric" })}
+              />
               <YAxis
                 tick={{ fontSize: 10 }}
                 width={48}
