@@ -64,6 +64,16 @@ Validated lazily with Zod in `lib/env.ts`:
 - `STEAM_MARKET_CURRENCY` — `USD` | `GBP` | `EUR` (default USD)
 - `CRON_SECRET` — Bearer token required by the daily snapshot cron
 - `SESSION_SECRET` — optional HMAC key for the session cookie (falls back to `STEAM_API_KEY`)
+- `NEXT_PUBLIC_DISPLAY_TIMEZONE` — optional IANA tz for the UI (build-time; falls back to the browser tz)
+
+### Dates & timezones
+
+The DB always stores **UTC** (snapshot days as UTC calendar days, `computed_at`/`added_at`
+as ISO UTC). `lib/datetime.ts` is the client display layer: `formatDay()` renders a
+'YYYY-MM-DD' UTC bucket day (never timezone-shifted — it's a bucket key), while
+`formatDateTime()` renders real timestamps in the viewer's tz (`NEXT_PUBLIC_DISPLAY_TIMEZONE`
+→ browser → UTC). Charts/holdings use `formatDay`; admin "added" and the value-panel
+"updated" use `formatDateTime`.
 
 ### Data
 

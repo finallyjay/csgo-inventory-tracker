@@ -7,6 +7,7 @@ import { InputFrame } from "@/components/ui/input-frame"
 import { surfaceCardVariants } from "@/components/ui/surface-card"
 import { EmptyState } from "@/components/ui/empty-state"
 import { toast } from "@/hooks/use-toast"
+import { formatDateTime } from "@/lib/datetime"
 import type { AllowedUser, AllowedUsersResponse } from "@/lib/types/api"
 
 export function WhitelistManager({ initialUsers }: { initialUsers: AllowedUser[] }) {
@@ -99,7 +100,7 @@ export function WhitelistManager({ initialUsers }: { initialUsers: AllowedUser[]
               <div className="min-w-0 flex-1">
                 <p className="truncate font-mono text-sm">{u.steamId}</p>
                 <p className="text-muted-foreground text-2xs">
-                  added {new Date(u.addedAt).toLocaleDateString()}
+                  added {formatDateTime(u.addedAt)}
                   {u.addedBy ? ` · by ${u.addedBy}` : ""}
                 </p>
               </div>
