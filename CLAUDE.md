@@ -33,13 +33,16 @@ inventory domain logic (CS:GO / CS2) is not yet implemented.
   (httpOnly cookie), redirects to Steam OpenID. Rate-limited (10/min/IP).
 - `app/api/auth/steam/callback/route.ts` — validates the nonce, verifies the
   OpenID response with Steam, enforces the whitelist, fetches the public profile
-  (`GetPlayerSummaries`), sets the `steam_user` httpOnly cookie (7 days), upserts
-  the profile, redirects to `/dashboard`.
+  (`GetPlayerSummaries`), sets the **HMAC-signed** `steam_user` httpOnly cookie
+  (secure in prod, sameSite=lax, 7 days), upserts the profile, redirects to `/dashboard`.
+- `lib/server/session.ts` — `signSession()` / `verifySession()`. The cookie is
+  `<base64url(json)>.<hmac-sha256>` signed with `SESSION_SECRET` (falling back to
+  `STEAM_API_KEY`), so a forged cookie — even with a whitelisted Steam ID — is rejected.
 - `app/api/auth/me/route.ts` — returns the current user (`{ user }` or `{ user: null }`).
 - `app/api/auth/logout/route.ts` — clears the session cookie.
 - `app/lib/server-auth.ts` — `getCurrentUser()` / `requireAuth()` / `requireAdmin()`.
-  Re-validates the whitelist on every call and derives `isAdmin` fresh from
-  `ADMIN_STEAM_ID` (never stored in the cookie).
+  Verifies the cookie signature, re-validates the whitelist on every call, and
+  derives `isAdmin` fresh from `ADMIN_STEAM_ID` (never stored in the cookie).
 - `hooks/use-current-user.ts` — global client user state (pub/sub, dedup,
   visibility revalidation).
 
@@ -58,6 +61,9 @@ Validated lazily with Zod in `lib/env.ts`:
 - `STEAM_WHITELIST_IDS` — optional comma-separated extra allowed IDs
 - `NEXTAUTH_URL` — base URL for the OpenID realm / return_to
 - `SQLITE_PATH` — overrides DB path (`/data/` → `.data/` fallback)
+- `STEAM_MARKET_CURRENCY` — `USD` | `GBP` | `EUR` (default USD)
+- `CRON_SECRET` — Bearer token required by the daily snapshot cron
+- `SESSION_SECRET` — optional HMAC key for the session cookie (falls back to `STEAM_API_KEY`)
 
 ### Data
 
