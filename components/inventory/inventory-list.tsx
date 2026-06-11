@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { RefreshCw, Search, PackageOpen, AlertCircle, History, Info } from "lucide-react"
+import { RefreshCw, Search, PackageOpen, AlertCircle, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InputFrame } from "@/components/ui/input-frame"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -176,18 +176,10 @@ export function InventoryList() {
             </>
           ) : null}
         </div>
-        <div className="flex items-center gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link href="/inventory/history" className="inline-flex items-center gap-1.5">
-              <History className="h-4 w-4" aria-hidden="true" />
-              History
-            </Link>
-          </Button>
-          <Button onClick={handleSync} disabled={syncing} size="sm" className="inline-flex items-center gap-1.5">
-            <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} aria-hidden="true" />
-            {syncing ? "Valuing…" : "Sync now"}
-          </Button>
-        </div>
+        <Button onClick={handleSync} disabled={syncing} size="sm" className="inline-flex items-center gap-1.5">
+          <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} aria-hidden="true" />
+          {syncing ? "Valuing…" : "Sync now"}
+        </Button>
       </div>
 
       {data?.needsSync && (
