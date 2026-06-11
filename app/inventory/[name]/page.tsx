@@ -43,7 +43,7 @@ export default async function ItemDetailPage({ params }: { params: Promise<{ nam
     <PageContainer>
       <section className="mx-auto max-w-3xl py-10">
         <Link
-          href="/inventory"
+          href="/dashboard"
           className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-sm transition-colors"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />

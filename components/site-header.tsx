@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Shield, LogOut, Boxes } from "lucide-react"
+import { Shield, LogOut, Boxes, LineChart } from "lucide-react"
 import type { SteamUser } from "@/lib/auth"
 import { Button } from "@/components/ui/button"
 import { clearCurrentUser } from "@/hooks/use-current-user"
@@ -25,9 +25,16 @@ export function SiteHeader({ user }: { user: SteamUser }) {
 
         <div className="flex items-center gap-3">
           <Button asChild variant="ghost" size="sm">
-            <Link href="/inventory" className="inline-flex items-center gap-1.5">
+            <Link href="/dashboard" className="inline-flex items-center gap-1.5">
               <Boxes className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Inventory</span>
+              <span className="hidden sm:inline">Dashboard</span>
+            </Link>
+          </Button>
+
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/history" className="inline-flex items-center gap-1.5">
+              <LineChart className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">History</span>
             </Link>
           </Button>
 
