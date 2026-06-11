@@ -104,6 +104,25 @@ describe("parseInventoryItems (detailed)", () => {
     const graffiti = parseInventoryItems(RICH).items.find((i) => i.name.includes("Graffiti"))!
     expect(graffiti.iconUrl).toBeNull()
   })
+
+  it("surfaces Steam's total_inventory_count as steamReportedCount", () => {
+    const parsed = parseInventoryItems(RAW)
+    expect(parsed.totalItemCount).toBe(4)
+    expect(parsed.steamReportedCount).toBe(4)
+  })
+
+  it("flags a discrepancy when Steam reports more than it serves (e.g. recent Market buys)", () => {
+    // Steam counts 6 but only ships 4 assets — the 2-item gap the UI surfaces.
+    const parsed = parseInventoryItems({ ...RAW, total_inventory_count: 6 })
+    expect(parsed.totalItemCount).toBe(4)
+    expect(parsed.steamReportedCount).toBe(6)
+    expect(parsed.steamReportedCount - parsed.totalItemCount).toBe(2)
+  })
+
+  it("falls back to the received count when Steam omits total_inventory_count", () => {
+    const parsed = parseInventoryItems(RICH) // no total_inventory_count
+    expect(parsed.steamReportedCount).toBe(parsed.totalItemCount)
+  })
 })
 
 const STICKER_HTML =

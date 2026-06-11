@@ -75,6 +75,8 @@ export type InventoryItemsResponse = {
   items: InventoryItemView[]
   currency: string
   totalItemCount: number
+  /** Steam's reported total; exceeds totalItemCount when its API lags (e.g. recent Market buys). */
+  steamReportedCount: number
   /** Sum of known line totals (minor units). */
   totalValue: number
   /** How many item rows had a cached price. */
