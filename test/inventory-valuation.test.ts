@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { rmSync } from "node:fs"
 import { computeInventoryValue } from "@/lib/server/inventory-valuation"
 import { getLatestInventoryValue } from "@/lib/server/inventory-value"
+import { getItemPriceHistory } from "@/lib/server/item-price-history"
 import { getSqliteDatabase } from "@/lib/server/sqlite"
 
 const dbPath = join(tmpdir(), `csgo-valuation-test-${process.pid}.sqlite`)
@@ -76,6 +77,53 @@ describe("computeInventoryValue", () => {
     const snap = getLatestInventoryValue(STEAM_ID)
     expect(snap?.snapshotDate).toBe("2026-06-05")
     expect(snap?.totalValue).toBe(102000)
+  })
+
+  it("records per-item price history under the snapshot day, even when prices come from the warm cache", async () => {
+    const AK = "AK-47 | Redline (Field-Tested)"
+    getSqliteDatabase().prepare("DELETE FROM item_price_history WHERE market_hash_name = ?").run(AK)
+
+    // First snapshot does a live fetch and warms the price cache.
+    await computeInventoryValue(STEAM_ID, { currency: "USD", delayMs: 0, snapshotDate: "2026-06-10" })
+    // Next day's snapshot serves entirely from the still-fresh cache — yet the
+    // per-item history must still gain a point (the bug: it didn't, so the
+    // dashboard line moved while the item chart stayed flat at one entry).
+    await computeInventoryValue(STEAM_ID, { currency: "USD", delayMs: 0, snapshotDate: "2026-06-11" })
+
+    const history = getItemPriceHistory(AK, "USD", { from: "2026-06-10", to: "2026-06-11" })
+    expect(history).toEqual([
+      { snapshotDate: "2026-06-10", price: 1000 },
+      { snapshotDate: "2026-06-11", price: 1000 },
+    ])
+  })
+
+  it("forced-live valuation (maxAgeMs: 0) refetches a warm-cached price, so the value moves", async () => {
+    // Day 1: AK at $10, warms the price cache.
+    const day1 = await computeInventoryValue(STEAM_ID, { currency: "USD", delayMs: 0, snapshotDate: "2026-06-20" })
+    expect(day1.totalValue).toBe(102000)
+
+    // AK doubles to $20 on Steam (cache still holds the $10 from day 1).
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL) => {
+        const url = String(input)
+        if (url.includes("/inventory/")) return { ok: true, json: async () => INVENTORY } as unknown as Response
+        const name = new URL(url).searchParams.get("market_hash_name") ?? ""
+        const price = name.startsWith("AK-47") ? "$20.00" : PRICES[name]
+        return { ok: true, json: async () => ({ success: true, lowest_price: price }) } as unknown as Response
+      }),
+    )
+
+    // A forced-live valuation must ignore the warm cache and pick up $20:
+    // AK $20 x2 (4000) + Karambit $1000 (100000) = 104000. Without maxAgeMs: 0
+    // it would reuse the cached $10 and report an unchanged 102000.
+    const live = await computeInventoryValue(STEAM_ID, {
+      currency: "USD",
+      delayMs: 0,
+      snapshotDate: "2026-06-21",
+      maxAgeMs: 0,
+    })
+    expect(live.totalValue).toBe(104000)
   })
 
   it("counts items with no price under unpricedNames and excludes them from the total", async () => {

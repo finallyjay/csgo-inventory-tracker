@@ -2,7 +2,6 @@ import "server-only"
 
 import { CS2_APP_ID, parsePriceToMinorUnits, steamCurrencyCode } from "@/lib/market"
 import { getSqliteDatabase } from "@/lib/server/sqlite"
-import { recordItemPrice } from "@/lib/server/item-price-history"
 import { logger } from "@/lib/server/logger"
 
 /** How long a cached price stays fresh before we refetch (12 hours). */
@@ -34,8 +33,9 @@ export function getCachedPrice(
 
   if (!row) return null
 
+  // Fresh iff strictly younger than maxAgeMs, so maxAgeMs: 0 always refetches.
   const age = Date.now() - new Date(row.fetched_at).getTime()
-  if (age > maxAgeMs) return null
+  if (age >= maxAgeMs) return null
 
   return { price: row.price, fetchedAt: row.fetched_at }
 }
@@ -173,8 +173,6 @@ export async function getPrices(
     try {
       const price = await fetchPriceFromSteam(name, currency)
       setCachedPrice(name, currency, price)
-      // Accumulate the per-item daily price history (only when there's a price).
-      if (price != null) recordItemPrice(name, currency, price)
       prices.set(name, price)
     } catch (err) {
       logger.warn({ err, name }, "Live price fetch failed; treating as no price")
