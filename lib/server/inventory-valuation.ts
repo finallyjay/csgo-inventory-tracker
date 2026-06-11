@@ -4,6 +4,7 @@ import { fetchInventoryItems } from "@/lib/server/steam-inventory"
 import { getPrices, type GetPricesOptions } from "@/lib/server/market-prices"
 import { recordInventoryValue } from "@/lib/server/inventory-value"
 import { recordHoldings } from "@/lib/server/inventory-holdings"
+import { recordItemPrice } from "@/lib/server/item-price-history"
 import { logger } from "@/lib/server/logger"
 import type { Sticker } from "@/lib/types/api"
 
@@ -26,6 +27,17 @@ export interface ComputeOptions extends GetPricesOptions {
   /** When false, computes the value without writing a snapshot. Defaults to true. */
   persist?: boolean
 }
+
+/**
+ * Max age of a cached price that a valuation snapshot will accept before
+ * refetching it live (1 hour). Much tighter than the 12h *display* TTL: a
+ * snapshot exists to capture the day's real market value, so it must not reuse a
+ * stale cached price — otherwise the recorded value (and the dashboard line)
+ * comes out byte-for-byte identical day after day. Still long enough that, within
+ * a single multi-user cron pass, an item priced for one user is reused for the
+ * rest instead of being refetched per user.
+ */
+export const SNAPSHOT_MAX_PRICE_AGE_MS = 60 * 60 * 1000
 
 /**
  * Fetches a user's CS2 inventory, values it against the day's Steam Market
@@ -52,7 +64,10 @@ export async function computeInventoryValue(steamId: string, options: ComputeOpt
     }
   }
 
-  const { prices } = await getPrices([...byName.keys()], currency, options)
+  const { prices } = await getPrices([...byName.keys()], currency, {
+    ...options,
+    maxAgeMs: options.maxAgeMs ?? SNAPSHOT_MAX_PRICE_AGE_MS,
+  })
 
   let totalValue = 0
   let pricedItemCount = 0
@@ -84,6 +99,14 @@ export async function computeInventoryValue(steamId: string, options: ComputeOpt
       itemCount: result.itemCount,
       pricedItemCount,
     })
+    // Per-item daily price history (global, not per-user) — recorded from the
+    // resolved prices so it accrues a point every snapshot day, whether the
+    // price came from a live fetch or the shared cache. Mirrors the value
+    // snapshot above, which is why the dashboard line and the item-detail
+    // chart now stay in lockstep.
+    for (const [name, price] of prices) {
+      if (price != null) recordItemPrice(name, currency, price, options.snapshotDate)
+    }
     // Daily composition snapshot: items held, unit price, and stickers that day.
     recordHoldings(steamId, {
       snapshotDate: options.snapshotDate,

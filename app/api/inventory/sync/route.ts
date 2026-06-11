@@ -31,7 +31,13 @@ export async function POST() {
   }
 
   try {
-    const result = await computeInventoryValue(user.steamId, { currency: env.STEAM_MARKET_CURRENCY })
+    // Explicit user action: bypass the cache (maxAgeMs: 0) so a manual "Sync
+    // now" always reflects live Steam Market prices, never a cached number. The
+    // 3-per-5-min rate limit above keeps this from hammering Steam.
+    const result = await computeInventoryValue(user.steamId, {
+      currency: env.STEAM_MARKET_CURRENCY,
+      maxAgeMs: 0,
+    })
     return NextResponse.json(result)
   } catch (err) {
     if (err instanceof InventoryFetchError) {
