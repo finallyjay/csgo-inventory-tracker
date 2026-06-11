@@ -1,0 +1,5 @@
+# pnpm 10 reads dependency settings here (no longer from the package.json "pnpm" field).
+# Force postcss to a patched line: next pins postcss 8.4.31, vulnerable to a CSS
+# stringify XSS (Dependabot alert #1, GHSA). 8.5.x is the same major — drop-in safe.
+overrides:
+  postcss@<8.5.10: ^8.5.10
