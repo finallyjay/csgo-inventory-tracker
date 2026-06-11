@@ -89,6 +89,7 @@ export async function GET() {
     items,
     currency,
     totalItemCount: detailed.totalItemCount,
+    steamReportedCount: detailed.steamReportedCount,
     totalValue,
     pricedRows,
     needsSync: pricedRows === 0 && items.some((i) => i.marketable),

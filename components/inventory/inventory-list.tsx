@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { RefreshCw, Search, PackageOpen, AlertCircle, History } from "lucide-react"
+import { RefreshCw, Search, PackageOpen, AlertCircle, History, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InputFrame } from "@/components/ui/input-frame"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -195,6 +195,19 @@ export function InventoryList() {
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
             No prices cached yet. Hit “Sync now” to pull market prices for your items.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {data && data.steamReportedCount > data.totalItemCount && (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            Steam lists {data.steamReportedCount} items but only {data.totalItemCount} loaded here. The{" "}
+            {data.steamReportedCount - data.totalItemCount} missing are usually recent Market purchases that Steam
+            hasn’t published to its public inventory yet — try “Sync now” again in a few minutes. Items locked by a
+            trade hold (received in a trade and not yet tradable) also won’t show, as Steam keeps them out of the public
+            inventory entirely.
           </AlertDescription>
         </Alert>
       )}

@@ -75,7 +75,15 @@ export interface DetailedInventoryItem {
 
 export interface DetailedInventory {
   items: DetailedInventoryItem[]
+  /** Assets we actually received and parsed from Steam. */
   totalItemCount: number
+  /**
+   * Steam's own `total_inventory_count`. Can exceed `totalItemCount` when Steam's
+   * public inventory JSON lags its counter — typically right after a Market
+   * purchase — so the difference flags items not yet served by the API. (Trade-
+   * held items are excluded from this count entirely, so they can't be detected.)
+   */
+  steamReportedCount: number
 }
 
 /** A unique marketable item with the number of copies owned (for valuation). */
@@ -176,7 +184,11 @@ export function parseInventoryItems(raw: RawInventoryResponse): DetailedInventor
     })
   }
 
-  return { items: [...byKey.values()], totalItemCount }
+  return {
+    items: [...byKey.values()],
+    totalItemCount,
+    steamReportedCount: raw.total_inventory_count ?? totalItemCount,
+  }
 }
 
 /**
