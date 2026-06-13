@@ -195,11 +195,10 @@ export function InventoryList() {
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription>
-            Steam lists {data.steamReportedCount} items but only {data.totalItemCount} loaded here. The{" "}
-            {data.steamReportedCount - data.totalItemCount} missing are usually recent Market purchases that Steam
-            hasn’t published to its public inventory yet — try “Sync now” again in a few minutes. Items locked by a
-            trade hold (received in a trade and not yet tradable) also won’t show, as Steam keeps them out of the public
-            inventory entirely.
+            Steam lists {data.steamReportedCount} items but only {data.totalItemCount} loaded here. Steam hides newly
+            purchased or traded items from your public inventory for about 10 days, so recent additions won’t appear
+            here until then — this clears up on its own, no action needed. Items locked by a trade hold (received in a
+            trade and not yet tradable) also won’t show, as Steam keeps them out of the public inventory entirely.
           </AlertDescription>
         </Alert>
       )}
