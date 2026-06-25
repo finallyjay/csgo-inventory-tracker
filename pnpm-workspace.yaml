@@ -4,3 +4,9 @@
 # pin and next's image handling works without it, so keep it disabled.
 allowBuilds:
   sharp: false
+
+# undici < 7.28.0 has several advisories (Set-Cookie / SOCKS5 proxy / cache
+# bypass). It only enters transitively via jsdom (a devDependency used in tests),
+# so it never runs in production, but pin the patched line to clear the alerts.
+overrides:
+  undici: ^7.28.0
