@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { Line, LineChart, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { ChevronLeft, ChevronRight, PackageOpen, RefreshCw, TrendingUp } from "lucide-react"
+import { AnimatedText } from "@/components/ui/animated-text"
 import { Button } from "@/components/ui/button"
 import { surfaceCardVariants } from "@/components/ui/surface-card"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -125,7 +126,9 @@ export function InventoryValuePanel() {
         <div>
           <p className="text-muted-foreground text-2xs tracking-[var(--tracking-eyebrow)] uppercase">Inventory value</p>
           {latest ? (
-            <p className="text-accent mt-1 text-4xl">{formatPrice(latest.totalValue, latest.currency)}</p>
+            <p className="text-accent mt-1 text-4xl">
+              <AnimatedText text={formatPrice(latest.totalValue, latest.currency)} />
+            </p>
           ) : (
             <p className="text-muted-foreground mt-1 text-2xl">—</p>
           )}
@@ -239,7 +242,9 @@ export function InventoryValuePanel() {
 
             {holdings && (
               <div className="text-right">
-                <p className="text-accent text-2xl">{formatPrice(holdings.totalValue, holdings.currency)}</p>
+                <p className="text-accent text-2xl">
+                  <AnimatedText text={formatPrice(holdings.totalValue, holdings.currency)} />
+                </p>
                 <p className="text-muted-foreground text-2xs">{holdings.items.length} distinct items</p>
               </div>
             )}

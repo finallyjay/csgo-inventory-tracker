@@ -161,7 +161,9 @@ The aesthetic lives in `app/globals.css` — a retro arcade / CRT theme:
 
 Generic shadcn/ui primitives carried over from the base: button, card, dialog,
 select, tabs, toast/toaster, tooltip, badge, alert, progress, switch, skeleton,
-surface-card, page-container, section-title, empty-state, completion-ring, etc.
+surface-card, page-container, section-title, empty-state, etc. `animated-text`
+wraps the `slot-text` library (slot-machine roll for changing values, with a
+`prefers-reduced-motion` fallback) — used for the dashboard value figures.
 
 ### Key conventions
 
