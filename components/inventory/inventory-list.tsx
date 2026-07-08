@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { RefreshCw, Search, PackageOpen, AlertCircle, Info } from "lucide-react"
+import { AnimatedText } from "@/components/ui/animated-text"
 import { Button } from "@/components/ui/button"
 import { InputFrame } from "@/components/ui/input-frame"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -76,9 +77,13 @@ function ItemCard({ item, currency }: { item: InventoryItemView; currency: strin
         <div className="text-right">
           {item.unitPrice != null ? (
             <>
-              <p className="text-foreground text-sm">{formatPrice(item.lineTotal ?? 0, currency)}</p>
+              <p className="text-foreground text-sm">
+                <AnimatedText text={formatPrice(item.lineTotal ?? 0, currency)} />
+              </p>
               {item.count > 1 && (
-                <p className="text-muted-foreground text-2xs">{formatPrice(item.unitPrice, currency)} / unit</p>
+                <p className="text-muted-foreground text-2xs">
+                  <AnimatedText text={formatPrice(item.unitPrice, currency)} /> / unit
+                </p>
               )}
             </>
           ) : (
@@ -112,19 +117,31 @@ export function InventoryList() {
   const [sort, setSort] = useState<SortKey>("value-desc")
   const [syncing, setSyncing] = useState(false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  // `background` keeps the current list on screen (no skeleton swap) so the
+  // price roll animations can play in place after a sync — including on
+  // failure, where it toasts instead of wiping the mounted list.
+  const load = useCallback(async (background = false) => {
+    if (!background) setLoading(true)
     setError(null)
     try {
       const res = await fetch("/api/inventory/items", { cache: "no-store" })
       const body = await res.json()
       if (!res.ok) {
-        setError(body.error ?? "Failed to load inventory.")
+        const message = body.error ?? "Failed to load inventory."
+        if (background) {
+          toast({ title: "Refresh failed", description: message, variant: "destructive" })
+          return
+        }
+        setError(message)
         setData(null)
         return
       }
       setData(body as InventoryItemsResponse)
     } catch {
+      if (background) {
+        toast({ title: "Network error while refreshing", variant: "destructive" })
+        return
+      }
       setError("Network error while loading inventory.")
     } finally {
       setLoading(false)
@@ -145,7 +162,7 @@ export function InventoryList() {
         return
       }
       toast({ title: "Prices refreshed", description: formatPrice(body.totalValue, body.currency) })
-      await load()
+      await load(true)
     } catch {
       toast({ title: "Network error", variant: "destructive" })
     } finally {
@@ -169,7 +186,9 @@ export function InventoryList() {
             <Skeleton className="h-8 w-40" />
           ) : data ? (
             <>
-              <p className="text-accent text-3xl">{formatPrice(data.totalValue, data.currency)}</p>
+              <p className="text-accent text-3xl">
+                <AnimatedText text={formatPrice(data.totalValue, data.currency)} />
+              </p>
               <p className="text-muted-foreground text-2xs">
                 {data.totalItemCount} items · {data.pricedRows} priced
               </p>

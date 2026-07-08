@@ -1,6 +1,7 @@
 "use client"
 
 import { PackageOpen } from "lucide-react"
+import { AnimatedText } from "@/components/ui/animated-text"
 import { surfaceCardVariants } from "@/components/ui/surface-card"
 import { StickerBadge } from "@/components/inventory/sticker-badge"
 import { formatPrice } from "@/lib/market"
@@ -39,9 +40,13 @@ export function HoldingRow({ item, currency }: { item: HoldingItem; currency: st
         <div className="text-right">
           {item.unitPrice != null ? (
             <>
-              <p className="text-foreground text-sm">{formatPrice(item.lineTotal ?? 0, currency)}</p>
+              <p className="text-foreground text-sm">
+                <AnimatedText text={formatPrice(item.lineTotal ?? 0, currency)} />
+              </p>
               {item.count > 1 && (
-                <p className="text-muted-foreground text-2xs">{formatPrice(item.unitPrice, currency)} / unit</p>
+                <p className="text-muted-foreground text-2xs">
+                  <AnimatedText text={formatPrice(item.unitPrice, currency)} /> / unit
+                </p>
               )}
             </>
           ) : (

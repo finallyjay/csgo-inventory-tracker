@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { TrendingUp } from "lucide-react"
+import { AnimatedText } from "@/components/ui/animated-text"
 import { EmptyState } from "@/components/ui/empty-state"
 import { surfaceCardVariants } from "@/components/ui/surface-card"
 import { DateRangeSelector } from "@/components/charts/date-range-selector"
@@ -34,7 +35,9 @@ function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className={surfaceCardVariants({ variant: "metric" })}>
       <span className="text-muted-foreground text-2xs tracking-[var(--tracking-eyebrow)] uppercase">{label}</span>
-      <span className="text-foreground text-sm">{value}</span>
+      <span className="text-foreground text-sm">
+        <AnimatedText text={value} />
+      </span>
     </div>
   )
 }
