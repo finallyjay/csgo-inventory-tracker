@@ -184,6 +184,10 @@ export function InventoryValuePanel() {
                 strokeWidth={2}
                 dot={false}
                 activeDot={{ r: 5 }}
+                // Without this, every post-sync refetch hands recharts a new data
+                // array and the line replays its full draw — reads as the whole
+                // panel reloading. The value roll is the sync feedback instead.
+                isAnimationActive={false}
               />
               {selectedPoint && (
                 <ReferenceDot
