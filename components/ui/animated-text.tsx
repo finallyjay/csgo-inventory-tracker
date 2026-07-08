@@ -1,7 +1,7 @@
 "use client"
 
 import "slot-text/style.css"
-import { useSyncExternalStore } from "react"
+import { useEffect, useState, useSyncExternalStore } from "react"
 import { SlotText } from "slot-text/react"
 import type { SlotOptions } from "slot-text"
 
@@ -30,16 +30,26 @@ type AnimatedTextProps = {
 }
 
 /**
- * Slot-machine roll for short changing labels (values, totals). Falls back to
- * a plain <span> under prefers-reduced-motion, which slot-text does not
- * handle itself.
+ * Slot-machine roll for short changing labels (values, totals). Rolls in on
+ * mount too: the first paint masks every digit to 0 (same width, symbols and
+ * separators static) and the real digits roll in right after, so each page
+ * load gets the animation — not just later value changes. Falls back to a
+ * plain <span> under prefers-reduced-motion, which slot-text does not handle
+ * itself.
  */
 export function AnimatedText({ text, className }: AnimatedTextProps) {
   const reducedMotion = useSyncExternalStore(subscribeToReducedMotion, prefersReducedMotion, () => false)
+  const [display, setDisplay] = useState(() => text.replace(/\d/g, "0"))
+
+  useEffect(() => {
+    setDisplay(text)
+  }, [text])
 
   if (reducedMotion) {
     return <span className={className}>{text}</span>
   }
 
-  return <SlotText text={text} className={className} options={ROLL_OPTIONS} />
+  // aria-label pins the accessible name to the real value even while the
+  // masked first frame is on screen.
+  return <SlotText text={display} aria-label={text} className={className} options={ROLL_OPTIONS} />
 }
