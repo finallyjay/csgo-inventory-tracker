@@ -118,7 +118,8 @@ export function InventoryList() {
   const [syncing, setSyncing] = useState(false)
 
   // `background` keeps the current list on screen (no skeleton swap) so the
-  // price roll animations can play in place after a sync.
+  // price roll animations can play in place after a sync — including on
+  // failure, where it toasts instead of wiping the mounted list.
   const load = useCallback(async (background = false) => {
     if (!background) setLoading(true)
     setError(null)
@@ -126,12 +127,21 @@ export function InventoryList() {
       const res = await fetch("/api/inventory/items", { cache: "no-store" })
       const body = await res.json()
       if (!res.ok) {
-        setError(body.error ?? "Failed to load inventory.")
+        const message = body.error ?? "Failed to load inventory."
+        if (background) {
+          toast({ title: "Refresh failed", description: message, variant: "destructive" })
+          return
+        }
+        setError(message)
         setData(null)
         return
       }
       setData(body as InventoryItemsResponse)
     } catch {
+      if (background) {
+        toast({ title: "Network error while refreshing", variant: "destructive" })
+        return
+      }
       setError("Network error while loading inventory.")
     } finally {
       setLoading(false)
