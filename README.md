@@ -41,4 +41,30 @@ pnpm test         # run tests
 pnpm format       # oxfmt
 ```
 
+## Database migrations
+
+The SQLite schema is managed by a lightweight, versioned migration system
+(`lib/server/migrations.ts`). Migrations are an append-only, strictly-ordered
+list; the highest applied version is tracked in SQLite's built-in
+`PRAGMA user_version`, so no extra bookkeeping table is needed. On the first
+connection (`getSqliteDatabase()`), every migration newer than the database's
+current version is applied in order, each inside its own transaction — already
+applied migrations are skipped, and a failure rolls back cleanly.
+
+Migration v1 is the initial schema and uses `CREATE TABLE IF NOT EXISTS`, so a
+database that predates the migration system (tables present, `user_version = 0`)
+is stamped up to v1 without touching any data.
+
+To add a migration:
+
+1. Append a new entry to the `MIGRATIONS` array in `lib/server/migrations.ts`
+   with `version: <previous + 1>`, a short `name`, and an `up(db)` that performs
+   the schema change (`ALTER TABLE ... ADD COLUMN`, `CREATE TABLE`, …).
+2. Never edit, reorder, or delete a released migration — treat each one as
+   immutable, like a git commit.
+3. Do not put connection pragmas (`journal_mode`, `synchronous`,
+   `foreign_keys`) in a migration — those live in `sqlite.ts` and cannot run
+   inside a transaction.
+4. Add or extend coverage in `test/migrations.test.ts`.
+
 Not affiliated with Valve Corporation.
