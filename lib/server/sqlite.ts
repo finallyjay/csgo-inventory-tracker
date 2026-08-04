@@ -53,9 +53,14 @@ export function getSqliteDatabase(): DatabaseSync {
   const dbPath = getDatabasePath()
   mkdirSync(dirname(dbPath), { recursive: true })
 
-  database = new DatabaseSync(dbPath)
-  applyConnectionPragmas(database)
-  runMigrations(database)
+  // Open and fully migrate on a local variable first. Only cache the connection
+  // once migrations succeed — otherwise a failed migration would leave a
+  // half-migrated connection cached, and every later call would return that
+  // broken connection instead of re-attempting the migration.
+  const db = new DatabaseSync(dbPath)
+  applyConnectionPragmas(db)
+  runMigrations(db)
 
+  database = db
   return database
 }

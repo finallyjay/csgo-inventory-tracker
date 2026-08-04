@@ -213,7 +213,17 @@ export function runMigrations(db: DatabaseSync): void {
       db.exec("COMMIT")
       logger.info({ version: migration.version, name: migration.name }, "applied sqlite migration")
     } catch (error) {
-      db.exec("ROLLBACK")
+      // The failing statement may have already aborted the transaction, in
+      // which case ROLLBACK itself throws "no transaction is active". Swallow
+      // that secondary error so the ORIGINAL migration error is what propagates.
+      try {
+        db.exec("ROLLBACK")
+      } catch (rollbackError) {
+        logger.warn(
+          { version: migration.version, name: migration.name, err: rollbackError },
+          "sqlite migration rollback failed (transaction likely already aborted)",
+        )
+      }
       logger.error(
         { version: migration.version, name: migration.name, err: error },
         "sqlite migration failed; rolled back",

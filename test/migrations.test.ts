@@ -189,20 +189,27 @@ describe("runMigrations on a legacy (pre-migrations) database", () => {
 
 describe("getSqliteDatabase integration (fresh file on disk)", () => {
   const dbPath = join(tmpdir(), `csgo-migrations-test-${process.pid}.sqlite`)
+  const originalSqlitePath = process.env.SQLITE_PATH
+  let opened: DatabaseSync | undefined
 
   beforeAll(() => {
     process.env.SQLITE_PATH = dbPath
   })
 
   afterAll(() => {
+    // Close the cached connection before deleting its files, and restore the
+    // original SQLITE_PATH so this test doesn't leak state to other files.
+    opened?.close()
+    if (originalSqlitePath === undefined) delete process.env.SQLITE_PATH
+    else process.env.SQLITE_PATH = originalSqlitePath
     for (const suffix of ["", "-wal", "-shm"]) rmSync(dbPath + suffix, { force: true })
   })
 
   it("opens a real file at the latest version with all tables", async () => {
     const { getSqliteDatabase } = await import("@/lib/server/sqlite")
-    const db = getSqliteDatabase()
-    expect(userVersion(db)).toBe(LATEST_VERSION)
-    expect(tableNames(db)).toContain("steam_profile")
-    expect(tableNames(db)).toContain("inventory_holdings")
+    opened = getSqliteDatabase()
+    expect(userVersion(opened)).toBe(LATEST_VERSION)
+    expect(tableNames(opened)).toContain("steam_profile")
+    expect(tableNames(opened)).toContain("inventory_holdings")
   })
 })
