@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import crypto from "node:crypto"
 import { cookies } from "next/headers"
+import { isReturnToAllowed, safeEqual } from "@/lib/server/openid"
 import { isSteamIdWhitelisted } from "@/lib/whitelist"
 import { upsertProfile } from "@/lib/server/profile"
 import { signSession } from "@/lib/server/session"
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
   const nonce = searchParams.get("nonce")
   const nonceCookie = cookieStore.get("steam_openid_nonce")
 
-  if (!nonce || !nonceCookie?.value || !crypto.timingSafeEqual(Buffer.from(nonce), Buffer.from(nonceCookie.value))) {
+  if (!safeEqual(nonce, nonceCookie?.value)) {
     logger.info("Auth failed: invalid or missing nonce")
     cookieStore.delete("steam_openid_nonce")
     return NextResponse.redirect(getAppUrl("/?error=auth_failed", request))
@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
     // --- Verify return_to matches our realm ---
     const returnTo = searchParams.get("openid.return_to") ?? ""
     const expectedRealm = process.env.NEXTAUTH_URL || new URL("/", request.url).origin
-    if (!returnTo.startsWith(expectedRealm)) {
+    if (!isReturnToAllowed(returnTo, expectedRealm)) {
       return NextResponse.redirect(getAppUrl("/?error=auth_failed", request))
     }
 
