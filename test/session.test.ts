@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest"
-import { signSession, verifySession } from "@/lib/server/session"
+import crypto from "node:crypto"
+import { signSession, verifySession, SESSION_MAX_AGE_SECONDS } from "@/lib/server/session"
 import type { SteamUser } from "@/lib/auth"
 
 const USER: SteamUser = {
@@ -48,5 +49,45 @@ describe("session signing", () => {
     expect(verifySession("")).toBeNull()
     expect(verifySession("nodothere")).toBeNull()
     expect(verifySession(".sigonly")).toBeNull()
+  })
+})
+
+describe("session expiry", () => {
+  const TTL_MS = SESSION_MAX_AGE_SECONDS * 1000
+
+  it("embeds iat/exp in the signed payload, spanning the 7-day window", () => {
+    const issuedAt = 1_700_000_000_000
+    const token = signSession(USER, issuedAt)
+    const [payload] = token.split(".")
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"))
+    expect(claims.iat).toBe(issuedAt)
+    expect(claims.exp).toBe(issuedAt + TTL_MS)
+    // exp is part of the signed payload, so it's tamper-proof.
+    expect(verifySession(token, issuedAt)).toEqual(USER)
+  })
+
+  it("accepts a token right up to (but not at) its expiry", () => {
+    const issuedAt = 1_700_000_000_000
+    const token = signSession(USER, issuedAt)
+    // One ms before expiry: still valid.
+    expect(verifySession(token, issuedAt + TTL_MS - 1)).toEqual(USER)
+    // Exactly at expiry: rejected.
+    expect(verifySession(token, issuedAt + TTL_MS)).toBeNull()
+  })
+
+  it("rejects an expired token even with a valid signature", () => {
+    const issuedAt = 1_700_000_000_000
+    const token = signSession(USER, issuedAt)
+    expect(verifySession(token, issuedAt + TTL_MS + 1)).toBeNull()
+    // Well past expiry.
+    expect(verifySession(token, issuedAt + TTL_MS * 2)).toBeNull()
+  })
+
+  it("rejects a legacy token that carries no exp claim (correctly signed)", () => {
+    // Reproduce the old format: a signed payload with no iat/exp.
+    const key = process.env.SESSION_SECRET as string
+    const payload = Buffer.from(JSON.stringify(USER)).toString("base64url")
+    const sig = crypto.createHmac("sha256", key).update(payload).digest("base64url")
+    expect(verifySession(`${payload}.${sig}`)).toBeNull()
   })
 })

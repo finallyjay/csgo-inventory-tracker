@@ -1,3 +1,4 @@
+import crypto from "node:crypto"
 import { NextResponse, type NextRequest } from "next/server"
 import { env } from "@/lib/env"
 import { listProfileSteamIds } from "@/lib/server/profile"
@@ -25,7 +26,12 @@ export async function GET(request: NextRequest) {
   if (!secret) {
     return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 503 })
   }
-  if (request.headers.get("authorization") !== `Bearer ${secret}`) {
+  // Constant-time comparison so a wrong bearer can't be recovered byte-by-byte
+  // via timing. Guard on length first (timingSafeEqual throws on a mismatch),
+  // mirroring the HMAC check in lib/server/session.ts.
+  const provided = Buffer.from(request.headers.get("authorization") ?? "")
+  const expected = Buffer.from(`Bearer ${secret}`)
+  if (provided.length !== expected.length || !crypto.timingSafeEqual(provided, expected)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

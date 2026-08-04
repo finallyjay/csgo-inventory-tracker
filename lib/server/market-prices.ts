@@ -10,6 +10,47 @@ const DEFAULT_TTL_MS = 12 * 60 * 60 * 1000
 /** Delay between live Steam Market requests to respect its rate limit. */
 const DEFAULT_DELAY_MS = 1500
 
+/** Upper bound on how long we'll honour a `Retry-After` before giving up. */
+const MAX_BACKOFF_MS = 30_000
+
+/**
+ * A non-OK HTTP response from Steam's priceoverview endpoint. Carries the
+ * status (so callers can special-case 429 rate limiting) and any parsed
+ * `Retry-After` delay in milliseconds.
+ */
+export class SteamPriceHttpError extends Error {
+  readonly status: number
+  readonly retryAfterMs?: number
+
+  constructor(status: number, retryAfterMs?: number) {
+    super(`priceoverview returned ${status}`)
+    this.name = "SteamPriceHttpError"
+    this.status = status
+    this.retryAfterMs = retryAfterMs
+  }
+}
+
+/**
+ * Parses an HTTP `Retry-After` header into milliseconds. Supports both the
+ * delta-seconds form ("120") and the HTTP-date form. Returns undefined when the
+ * header is absent or unparseable.
+ */
+function parseRetryAfterMs(header: string | null, now: number = Date.now()): number | undefined {
+  if (!header) return undefined
+
+  const seconds = Number(header)
+  if (Number.isFinite(seconds)) {
+    return Math.max(0, seconds * 1000)
+  }
+
+  const date = Date.parse(header)
+  if (!Number.isNaN(date)) {
+    return Math.max(0, date - now)
+  }
+
+  return undefined
+}
+
 interface CacheRow {
   price: number | null
   fetched_at: string
@@ -94,7 +135,8 @@ interface PriceOverview {
  * Prefers `lowest_price`, falling back to `median_price`. Returns minor units,
  * or null if Steam reports no price.
  *
- * @throws on a non-OK HTTP response (e.g. 429) so callers can back off.
+ * @throws {SteamPriceHttpError} on a non-OK HTTP response (e.g. 429) so callers
+ *   can inspect the status / Retry-After and back off.
  */
 export async function fetchPriceFromSteam(marketHashName: string, currency: string): Promise<number | null> {
   const url = new URL("https://steamcommunity.com/market/priceoverview/")
@@ -104,7 +146,7 @@ export async function fetchPriceFromSteam(marketHashName: string, currency: stri
 
   const res = await fetch(url, { headers: { Accept: "application/json" } })
   if (!res.ok) {
-    throw new Error(`priceoverview returned ${res.status}`)
+    throw new SteamPriceHttpError(res.status, parseRetryAfterMs(res.headers.get("retry-after")))
   }
 
   const data = (await res.json()) as PriceOverview
@@ -129,8 +171,10 @@ export interface GetPricesResult {
   cacheHits: number
   /** Number of names fetched live from Steam. */
   fetched: number
-  /** Names skipped because the maxFetches cap was hit. */
+  /** Names skipped because the maxFetches cap was hit or Steam rate-limited us. */
   skipped: string[]
+  /** True if Steam returned a 429 and we stopped issuing further live fetches. */
+  rateLimited: boolean
 }
 
 /**
@@ -151,6 +195,7 @@ export async function getPrices(
   const skipped: string[] = []
   let cacheHits = 0
   let fetched = 0
+  let rateLimited = false
 
   // Dedupe so repeated names cost at most one lookup.
   const uniqueNames = [...new Set(marketHashNames)]
@@ -163,23 +208,52 @@ export async function getPrices(
       continue
     }
 
-    if (fetched >= maxFetches) {
+    // Stop issuing live fetches once the cap is hit or Steam has rate-limited
+    // us. Cached names above still resolve; everything else is reported skipped.
+    if (rateLimited || fetched >= maxFetches) {
       skipped.push(name)
       continue
     }
 
     if (fetched > 0) await sleep(delayMs)
 
-    try {
-      const price = await fetchPriceFromSteam(name, currency)
-      setCachedPrice(name, currency, price)
-      prices.set(name, price)
-    } catch (err) {
-      logger.warn({ err, name }, "Live price fetch failed; treating as no price")
-      prices.set(name, null)
+    // At most one Retry-After backoff+retry per name; a persistent 429 aborts
+    // the run so we stop hammering an already rate-limited Steam.
+    let retriedAfterBackoff = false
+    let resolved = false
+    while (!resolved) {
+      try {
+        const price = await fetchPriceFromSteam(name, currency)
+        setCachedPrice(name, currency, price)
+        prices.set(name, price)
+        fetched++
+        resolved = true
+      } catch (err) {
+        if (err instanceof SteamPriceHttpError && err.status === 429) {
+          if (!retriedAfterBackoff && err.retryAfterMs != null) {
+            // Steam told us how long to wait: honour it and retry once. If the
+            // retry succeeds we carry on normally (no abort).
+            retriedAfterBackoff = true
+            const backoff = Math.min(err.retryAfterMs, MAX_BACKOFF_MS)
+            logger.warn({ name, backoff }, "Steam rate-limited (429); backing off before one retry")
+            await sleep(backoff)
+            continue // retry this same name once
+          }
+          // No Retry-After, or the retry also 429'd: abort further live fetches
+          // so we stop hammering an already rate-limited Steam.
+          rateLimited = true
+          logger.warn({ name }, "Steam rate-limited (429); aborting remaining live price fetches")
+          skipped.push(name)
+          resolved = true
+        } else {
+          logger.warn({ err, name }, "Live price fetch failed; treating as no price")
+          prices.set(name, null)
+          fetched++
+          resolved = true
+        }
+      }
     }
-    fetched++
   }
 
-  return { prices, cacheHits, fetched, skipped }
+  return { prices, cacheHits, fetched, skipped, rateLimited }
 }
