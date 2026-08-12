@@ -1,9 +1,10 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi, afterEach } from "vitest"
 import {
   parseInventory,
   parseInventoryItems,
   parseStickers,
   inventoryErrorInfo,
+  fetchWithBackoff,
   type RawInventoryResponse,
 } from "@/lib/server/steam-inventory"
 
@@ -178,6 +179,58 @@ describe("parseInventoryItems stickers", () => {
     const without = items.find((i) => i.stickers.length === 0)!
     expect(withStickers.stickers.map((s) => s.name)).toEqual(["olofmeister | Krakow 2017", "Virtus.Pro | Krakow 2017"])
     expect(without.count).toBe(1)
+  })
+})
+
+describe("fetchWithBackoff", () => {
+  const url = new URL("https://steamcommunity.com/inventory/765/730/2")
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function stubFetchSequence(statuses: number[]) {
+    const mock = vi.fn()
+    for (const status of statuses) {
+      mock.mockResolvedValueOnce(new Response("{}", { status }))
+    }
+    vi.stubGlobal("fetch", mock)
+    return mock
+  }
+
+  it("returns the first response when it is OK", async () => {
+    const mock = stubFetchSequence([200])
+    const res = await fetchWithBackoff(url, [0, 0])
+    expect(res.status).toBe(200)
+    expect(mock).toHaveBeenCalledTimes(1)
+  })
+
+  it("retries a 429 and returns the eventual success", async () => {
+    const mock = stubFetchSequence([429, 200])
+    const res = await fetchWithBackoff(url, [0, 0])
+    expect(res.status).toBe(200)
+    expect(mock).toHaveBeenCalledTimes(2)
+  })
+
+  it("retries a transient 5xx", async () => {
+    const mock = stubFetchSequence([503, 200])
+    const res = await fetchWithBackoff(url, [0, 0])
+    expect(res.status).toBe(200)
+    expect(mock).toHaveBeenCalledTimes(2)
+  })
+
+  it("returns the last 429 once retries are exhausted", async () => {
+    const mock = stubFetchSequence([429, 429, 429])
+    const res = await fetchWithBackoff(url, [0, 0])
+    expect(res.status).toBe(429)
+    expect(mock).toHaveBeenCalledTimes(3)
+  })
+
+  it("does not retry a private-inventory 403", async () => {
+    const mock = stubFetchSequence([403])
+    const res = await fetchWithBackoff(url, [0, 0])
+    expect(res.status).toBe(403)
+    expect(mock).toHaveBeenCalledTimes(1)
   })
 })
 

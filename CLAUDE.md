@@ -92,6 +92,10 @@ Structured logging via Pino (`lib/server/logger.ts`).
 - `lib/server/steam-inventory.ts` — `fetchInventory()` hits
   `steamcommunity.com/inventory/{id}/730/2` and `parseInventory()` (pure) reduces
   it to marketable items aggregated by `market_hash_name`. Private/429 → `InventoryFetchError`.
+  Steam throttles this endpoint hard per IP (datacenter IPs especially), so the raw
+  merged payload is cached 10 min per user in `inventory_raw_cache`
+  (`lib/server/steam-inventory-cache.ts`) and live fetches retry 429/5xx with
+  backoff (`fetchWithBackoff`, honoring `Retry-After`).
 - `lib/server/market-prices.ts` — `getPrices()` resolves prices via the shared
   `market_price_cache` table (12h TTL) and falls back to Steam Market
   `priceoverview`, fetched **sequentially with a delay** to respect rate limits.

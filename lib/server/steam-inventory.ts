@@ -1,6 +1,7 @@
 import "server-only"
 
 import { CS2_APP_ID, CS2_CONTEXT_ID } from "@/lib/market"
+import { getCachedRawInventory, setCachedRawInventory } from "@/lib/server/steam-inventory-cache"
 import { logger } from "@/lib/server/logger"
 
 interface SteamAsset {
@@ -241,15 +242,62 @@ export function inventoryErrorInfo(status: number): { status: number; message: s
 const INVENTORY_PAGE_SIZE = 2000
 const MAX_INVENTORY_PAGES = 10
 
+// Waits between retries of a throttled inventory request. Steam rate-limits the
+// public inventory endpoint per IP (datacenter IPs especially), and a burst
+// often clears within seconds — so a couple of spaced retries rescues most
+// syncs that would otherwise fail with 429.
+const RETRY_DELAYS_MS = [2000, 5000]
+
+// Upper bound on how long a Retry-After header is honored. Beyond this the
+// request fails fast instead of holding the route open.
+const MAX_RETRY_AFTER_MS = 15_000
+
+function sleep(ms: number): Promise<void> {
+  if (ms <= 0) return Promise.resolve()
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * Fetches a URL, retrying on 429 and 5xx responses with the given waits between
+ * attempts (honoring a sane `Retry-After` header when Steam sends one). Returns
+ * the last response — still non-OK if every attempt was throttled — so callers
+ * keep their normal status handling.
+ */
+export async function fetchWithBackoff(
+  url: URL,
+  retryDelaysMs: readonly number[] = RETRY_DELAYS_MS,
+): Promise<Response> {
+  let res = await fetch(url, { headers: { Accept: "application/json" } })
+
+  for (const delayMs of retryDelaysMs) {
+    if (res.ok || (res.status !== 429 && res.status < 500)) return res
+
+    const retryAfterSec = Number.parseInt(res.headers.get("retry-after") ?? "", 10)
+    const waitMs =
+      Number.isFinite(retryAfterSec) && retryAfterSec > 0 ? Math.min(retryAfterSec * 1000, MAX_RETRY_AFTER_MS) : delayMs
+
+    logger.info({ url: url.pathname, status: res.status, waitMs }, "Steam throttled request; retrying")
+    await sleep(waitMs)
+    res = await fetch(url, { headers: { Accept: "application/json" } })
+  }
+
+  return res
+}
+
 /**
  * Fetches and JSON-parses a user's public CS2 inventory, following Steam's
- * `start_assetid` pagination and merging the pages. Throws
+ * `start_assetid` pagination and merging the pages. Served from the short-TTL
+ * SQLite cache when fresh; live fetches retry with backoff on throttling and
+ * write the merged result back to the cache. Throws
  * {@link InventoryFetchError} on a private/inaccessible inventory (400/403),
  * rate limit (429), or any other non-OK / unsuccessful response.
  *
  * @throws InventoryFetchError
  */
 async function fetchInventoryRaw(steamId: string): Promise<RawInventoryResponse> {
+  const cached = getCachedRawInventory(steamId)
+  if (cached) return cached
+
   const merged: Required<Pick<RawInventoryResponse, "assets" | "descriptions">> & RawInventoryResponse = {
     assets: [],
     descriptions: [],
@@ -265,7 +313,7 @@ async function fetchInventoryRaw(steamId: string): Promise<RawInventoryResponse>
     url.searchParams.set("count", String(INVENTORY_PAGE_SIZE))
     if (startAssetId) url.searchParams.set("start_assetid", startAssetId)
 
-    const res = await fetch(url, { headers: { Accept: "application/json" } })
+    const res = await fetchWithBackoff(url)
     if (!res.ok) {
       logger.info({ steamId, status: res.status, page }, "Inventory fetch failed")
       throw new InventoryFetchError(`Steam inventory fetch returned ${res.status}`, res.status)
@@ -284,6 +332,7 @@ async function fetchInventoryRaw(steamId: string): Promise<RawInventoryResponse>
     startAssetId = raw.last_assetid
   }
 
+  setCachedRawInventory(steamId, merged)
   return merged
 }
 
