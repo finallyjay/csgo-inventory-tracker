@@ -1,6 +1,7 @@
 import "server-only"
 
 import { CS2_APP_ID, CS2_CONTEXT_ID } from "@/lib/market"
+import { parseRetryAfterMs } from "@/lib/server/market-prices"
 import { getCachedRawInventory, setCachedRawInventory } from "@/lib/server/steam-inventory-cache"
 import { logger } from "@/lib/server/logger"
 
@@ -272,9 +273,8 @@ export async function fetchWithBackoff(
   for (const delayMs of retryDelaysMs) {
     if (res.ok || (res.status !== 429 && res.status < 500)) return res
 
-    const retryAfterSec = Number.parseInt(res.headers.get("retry-after") ?? "", 10)
-    const waitMs =
-      Number.isFinite(retryAfterSec) && retryAfterSec > 0 ? Math.min(retryAfterSec * 1000, MAX_RETRY_AFTER_MS) : delayMs
+    const retryAfterMs = parseRetryAfterMs(res.headers.get("retry-after"))
+    const waitMs = retryAfterMs !== undefined && retryAfterMs > 0 ? Math.min(retryAfterMs, MAX_RETRY_AFTER_MS) : delayMs
 
     logger.info({ url: url.pathname, status: res.status, waitMs }, "Steam throttled request; retrying")
     await sleep(waitMs)

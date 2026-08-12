@@ -226,6 +226,19 @@ describe("fetchWithBackoff", () => {
     expect(mock).toHaveBeenCalledTimes(3)
   })
 
+  it("honors an HTTP-date Retry-After and still retries", async () => {
+    const mock = vi.fn()
+    mock.mockResolvedValueOnce(
+      new Response("{}", { status: 429, headers: { "Retry-After": new Date(Date.now() + 100).toUTCString() } }),
+    )
+    mock.mockResolvedValueOnce(new Response("{}", { status: 200 }))
+    vi.stubGlobal("fetch", mock)
+
+    const res = await fetchWithBackoff(url, [0])
+    expect(res.status).toBe(200)
+    expect(mock).toHaveBeenCalledTimes(2)
+  })
+
   it("does not retry a private-inventory 403", async () => {
     const mock = stubFetchSequence([403])
     const res = await fetchWithBackoff(url, [0, 0])

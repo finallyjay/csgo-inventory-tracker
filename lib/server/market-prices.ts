@@ -33,9 +33,10 @@ export class SteamPriceHttpError extends Error {
 /**
  * Parses an HTTP `Retry-After` header into milliseconds. Supports both the
  * delta-seconds form ("120") and the HTTP-date form. Returns undefined when the
- * header is absent or unparseable.
+ * header is absent or unparseable. Shared with the inventory fetcher's backoff
+ * (`fetchWithBackoff` in steam-inventory.ts).
  */
-function parseRetryAfterMs(header: string | null, now: number = Date.now()): number | undefined {
+export function parseRetryAfterMs(header: string | null, now: number = Date.now()): number | undefined {
   if (!header) return undefined
 
   const seconds = Number(header)
