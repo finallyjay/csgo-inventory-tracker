@@ -226,17 +226,30 @@ describe("fetchWithBackoff", () => {
     expect(mock).toHaveBeenCalledTimes(3)
   })
 
-  it("honors an HTTP-date Retry-After and still retries", async () => {
-    const mock = vi.fn()
-    mock.mockResolvedValueOnce(
-      new Response("{}", { status: 429, headers: { "Retry-After": new Date(Date.now() + 100).toUTCString() } }),
-    )
-    mock.mockResolvedValueOnce(new Response("{}", { status: 200 }))
-    vi.stubGlobal("fetch", mock)
+  it("waits out an HTTP-date Retry-After before retrying", async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date("2026-08-12T12:00:00Z"))
+      const mock = vi.fn()
+      mock.mockResolvedValueOnce(
+        new Response("{}", { status: 429, headers: { "Retry-After": "Wed, 12 Aug 2026 12:00:02 GMT" } }),
+      )
+      mock.mockResolvedValueOnce(new Response("{}", { status: 200 }))
+      vi.stubGlobal("fetch", mock)
 
-    const res = await fetchWithBackoff(url, [0])
-    expect(res.status).toBe(200)
-    expect(mock).toHaveBeenCalledTimes(2)
+      const promise = fetchWithBackoff(url, [0])
+
+      // 1ms short of the 2s the header asks for: the retry must not have fired.
+      await vi.advanceTimersByTimeAsync(1999)
+      expect(mock).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(1)
+      const res = await promise
+      expect(res.status).toBe(200)
+      expect(mock).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("does not retry a private-inventory 403", async () => {
