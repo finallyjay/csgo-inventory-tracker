@@ -80,7 +80,9 @@ as ISO UTC). `lib/datetime.ts` is the client display layer: `formatDay()` render
 SQLite via Node's built-in `node:sqlite` (`lib/server/sqlite.ts`). Tables:
 `steam_profile` (cached public profiles), `allowed_users` (persisted whitelist),
 `inventory_value_history` (one daily snapshot of total inventory value per user).
-Structured logging via Pino (`lib/server/logger.ts`).
+Schema changes go through the versioned migration system in
+`lib/server/migrations.ts` (append-only list, `PRAGMA user_version` bookkeeping —
+see the how-to comment there). Structured logging via Pino (`lib/server/logger.ts`).
 
 ### Inventory valuation pipeline
 

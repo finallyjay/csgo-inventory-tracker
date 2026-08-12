@@ -21,11 +21,15 @@ describe("AnimatedText", () => {
   it("renders the text through slot-text when motion is allowed", () => {
     mockMatchMedia(false)
     const { container } = render(<AnimatedText text="$1,234.56" />)
-    // slot-text splits the label into per-character cells (each holding old and
-    // new glyphs), so the accessible name — not textContent — is the contract.
-    const root = container.querySelector(".slot-text")
+    // The accessible name — not textContent — is the contract: in a browser
+    // slot-text splits the label into per-character cells, and since 0.3.3 it
+    // probes whether its stylesheet applied and falls back to plain text when
+    // it did not (always the case in jsdom), so the ".slot-text" class is no
+    // longer a stable hook here.
+    const root = container.querySelector("span")
     expect(root).not.toBeNull()
     expect(root).toHaveAttribute("aria-label", "$1,234.56")
+    expect(root?.textContent).toBe("$1,234.56")
   })
 
   it("falls back to a plain span under prefers-reduced-motion", () => {
@@ -42,6 +46,6 @@ describe("AnimatedText", () => {
     mockMatchMedia(false)
     const { container, rerender } = render(<AnimatedText text="$10.00" />)
     rerender(<AnimatedText text="$12.50" />)
-    expect(container.querySelector(".slot-text")).toHaveAttribute("aria-label", "$12.50")
+    expect(container.querySelector("span")).toHaveAttribute("aria-label", "$12.50")
   })
 })
