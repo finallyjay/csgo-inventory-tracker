@@ -157,6 +157,25 @@ export const MIGRATIONS: readonly Migration[] = [
       `)
     },
   },
+  {
+    version: 2,
+    name: "inventory raw cache",
+    up(db) {
+      db.exec(`
+        -- Short-TTL cache of the merged raw Steam inventory payload per user. Steam
+        -- rate-limits the public inventory endpoint aggressively per IP (datacenter
+        -- IPs especially), so repeated syncs / items-page loads within the TTL reuse
+        -- the last fetch instead of hitting Steam again. Prices are NOT cached here —
+        -- only the inventory composition, which changes far slower (Steam even hides
+        -- new acquisitions from the public endpoint for ~10 days).
+        CREATE TABLE IF NOT EXISTS inventory_raw_cache (
+          steam_id TEXT PRIMARY KEY,
+          payload TEXT NOT NULL,     -- RawInventoryResponse JSON (pages already merged)
+          fetched_at TEXT NOT NULL
+        );
+      `)
+    },
+  },
 ]
 
 /** The version a fully-migrated database should be at. */

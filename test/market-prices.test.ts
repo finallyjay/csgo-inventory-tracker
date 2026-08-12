@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { rmSync } from "node:fs"
-import { setCachedPrice, getCachedPrices, getPrices } from "@/lib/server/market-prices"
+import { setCachedPrice, getCachedPrices, getPrices, parseRetryAfterMs } from "@/lib/server/market-prices"
 
 const dbPath = join(tmpdir(), `csgo-prices-test-${process.pid}.sqlite`)
 
@@ -31,6 +31,29 @@ describe("getCachedPrices", () => {
 
   it("returns an empty map for no names", () => {
     expect(getCachedPrices([], "USD").size).toBe(0)
+  })
+})
+
+describe("parseRetryAfterMs", () => {
+  const NOW = Date.parse("2026-08-12T12:00:00Z")
+
+  it("parses the delta-seconds form", () => {
+    expect(parseRetryAfterMs("120", NOW)).toBe(120_000)
+    expect(parseRetryAfterMs("0", NOW)).toBe(0)
+  })
+
+  it("parses the HTTP-date form into the remaining delay", () => {
+    expect(parseRetryAfterMs("Wed, 12 Aug 2026 12:00:30 GMT", NOW)).toBe(30_000)
+  })
+
+  it("clamps an HTTP date in the past to 0", () => {
+    expect(parseRetryAfterMs("Wed, 12 Aug 2026 11:59:00 GMT", NOW)).toBe(0)
+  })
+
+  it("returns undefined for absent or unparseable values (incl. partially numeric)", () => {
+    expect(parseRetryAfterMs(null, NOW)).toBeUndefined()
+    expect(parseRetryAfterMs("soon", NOW)).toBeUndefined()
+    expect(parseRetryAfterMs("5seconds", NOW)).toBeUndefined()
   })
 })
 

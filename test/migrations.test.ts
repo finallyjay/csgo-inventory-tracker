@@ -117,6 +117,7 @@ describe("runMigrations on a fresh database", () => {
     expect(tableNames(db)).toEqual([
       "allowed_users",
       "inventory_holdings",
+      "inventory_raw_cache",
       "inventory_value_history",
       "item",
       "item_price_history",
@@ -173,6 +174,17 @@ describe("runMigrations on a legacy (pre-migrations) database", () => {
       .prepare("SELECT total_value FROM inventory_value_history WHERE steam_id = ?")
       .get("76561197960287930") as { total_value: number }
     expect(history.total_value).toBe(12345)
+  })
+
+  it("v2 adds inventory_raw_cache to a database already at v1", () => {
+    // Bring the legacy database to v1 only, then let a full run apply v2.
+    db.exec("PRAGMA user_version = 1")
+    expect(tableNames(db)).not.toContain("inventory_raw_cache")
+
+    runMigrations(db)
+
+    expect(userVersion(db)).toBe(LATEST_VERSION)
+    expect(tableNames(db)).toContain("inventory_raw_cache")
   })
 
   it("converges to the same schema as a fresh database", () => {

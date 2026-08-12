@@ -44,8 +44,9 @@ afterAll(() => {
 })
 
 beforeEach(() => {
-  // Fresh price cache each test so the live-fetch path is exercised.
+  // Fresh price + raw-inventory caches each test so the live-fetch path is exercised.
   getSqliteDatabase().prepare("DELETE FROM market_price_cache").run()
+  getSqliteDatabase().prepare("DELETE FROM inventory_raw_cache").run()
 
   vi.stubGlobal(
     "fetch",

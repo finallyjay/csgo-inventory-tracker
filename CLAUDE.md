@@ -80,7 +80,9 @@ as ISO UTC). `lib/datetime.ts` is the client display layer: `formatDay()` render
 SQLite via Node's built-in `node:sqlite` (`lib/server/sqlite.ts`). Tables:
 `steam_profile` (cached public profiles), `allowed_users` (persisted whitelist),
 `inventory_value_history` (one daily snapshot of total inventory value per user).
-Structured logging via Pino (`lib/server/logger.ts`).
+Schema changes go through the versioned migration system in
+`lib/server/migrations.ts` (append-only list, `PRAGMA user_version` bookkeeping —
+see the how-to comment there). Structured logging via Pino (`lib/server/logger.ts`).
 
 ### Inventory valuation pipeline
 
@@ -92,6 +94,10 @@ Structured logging via Pino (`lib/server/logger.ts`).
 - `lib/server/steam-inventory.ts` — `fetchInventory()` hits
   `steamcommunity.com/inventory/{id}/730/2` and `parseInventory()` (pure) reduces
   it to marketable items aggregated by `market_hash_name`. Private/429 → `InventoryFetchError`.
+  Steam throttles this endpoint hard per IP (datacenter IPs especially), so the raw
+  merged payload is cached 10 min per user in `inventory_raw_cache`
+  (`lib/server/steam-inventory-cache.ts`) and live fetches retry 429/5xx with
+  backoff (`fetchWithBackoff`, honoring `Retry-After`).
 - `lib/server/market-prices.ts` — `getPrices()` resolves prices via the shared
   `market_price_cache` table (12h TTL) and falls back to Steam Market
   `priceoverview`, fetched **sequentially with a delay** to respect rate limits.
