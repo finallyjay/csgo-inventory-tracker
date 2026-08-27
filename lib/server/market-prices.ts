@@ -161,7 +161,12 @@ export interface GetPricesOptions {
   maxAgeMs?: number
   /** Delay between live fetches (ms). Defaults to 1500. */
   delayMs?: number
-  /** Hard cap on live fetches in one call (cache hits don't count). */
+  /**
+   * Hard cap on live HTTP requests to Steam in one call (cache hits don't
+   * count). Counts every attempt, including a 429 backoff-retry, so a caller
+   * relying on this to bound wall-clock time gets that guarantee even when
+   * Steam is rate-limiting us mid-run.
+   */
   maxFetches?: number
 }
 
@@ -197,6 +202,11 @@ export async function getPrices(
   let cacheHits = 0
   let fetched = 0
   let rateLimited = false
+  // Every live HTTP request counts here, including a 429 backoff-retry —
+  // unlike `fetched` (names resolved), this is what maxFetches bounds, so a
+  // caller's time budget holds even when a chunk of names get rate-limited
+  // and retried mid-run.
+  let attempts = 0
 
   // Dedupe so repeated names cost at most one lookup.
   const uniqueNames = [...new Set(marketHashNames)]
@@ -211,18 +221,19 @@ export async function getPrices(
 
     // Stop issuing live fetches once the cap is hit or Steam has rate-limited
     // us. Cached names above still resolve; everything else is reported skipped.
-    if (rateLimited || fetched >= maxFetches) {
+    if (rateLimited || attempts >= maxFetches) {
       skipped.push(name)
       continue
     }
 
-    if (fetched > 0) await sleep(delayMs)
+    if (attempts > 0) await sleep(delayMs)
 
     // At most one Retry-After backoff+retry per name; a persistent 429 aborts
     // the run so we stop hammering an already rate-limited Steam.
     let retriedAfterBackoff = false
     let resolved = false
     while (!resolved) {
+      attempts++
       try {
         const price = await fetchPriceFromSteam(name, currency)
         setCachedPrice(name, currency, price)
@@ -231,20 +242,28 @@ export async function getPrices(
         resolved = true
       } catch (err) {
         if (err instanceof SteamPriceHttpError && err.status === 429) {
-          if (!retriedAfterBackoff && err.retryAfterMs != null) {
-            // Steam told us how long to wait: honour it and retry once. If the
-            // retry succeeds we carry on normally (no abort).
+          if (!retriedAfterBackoff && err.retryAfterMs != null && attempts < maxFetches) {
+            // Steam told us how long to wait: honour it and retry once (only
+            // if that retry still fits under the cap). If the retry succeeds
+            // we carry on normally (no abort).
             retriedAfterBackoff = true
             const backoff = Math.min(err.retryAfterMs, MAX_BACKOFF_MS)
             logger.warn({ name, backoff }, "Steam rate-limited (429); backing off before one retry")
             await sleep(backoff)
             continue // retry this same name once
           }
-          // No Retry-After, or the retry also 429'd: abort further live fetches
-          // so we stop hammering an already rate-limited Steam.
-          rateLimited = true
-          logger.warn({ name }, "Steam rate-limited (429); aborting remaining live price fetches")
           skipped.push(name)
+          if (attempts >= maxFetches) {
+            // Our own fetch cap ran out while deciding whether to retry — not
+            // Steam persistently throttling us, so don't report `rateLimited`.
+            // The outer per-name gate above will skip everything after this too.
+            logger.warn({ name }, "Fetch cap reached mid-retry; skipping remaining live price fetches")
+          } else {
+            // No Retry-After, or the retry also 429'd: abort further live
+            // fetches so we stop hammering an already rate-limited Steam.
+            rateLimited = true
+            logger.warn({ name }, "Steam rate-limited (429); aborting remaining live price fetches")
+          }
           resolved = true
         } else {
           logger.warn({ err, name }, "Live price fetch failed; treating as no price")
