@@ -28,17 +28,45 @@ neon-lit place. Shares the retro arcade / CRT aesthetic and tooling base of
 
 ```bash
 pnpm install
-pnpm dev          # http://localhost:3000
+cp .env.example .env       # fill in STEAM_API_KEY at minimum
+pnpm dev                    # http://localhost:3000
 ```
+
+See [Configuration](#configuration) below for what each variable does and
+which ones are actually required.
+
+## Configuration
+
+Environment variables are validated with Zod in `lib/env.ts` (server-only
+ones) and read directly from `process.env` for a couple of public/runtime
+ones. Copy `.env.example` to `.env` and fill it in.
+
+| Variable                       | Required | Description                                                                                                                                        |
+| ------------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STEAM_API_KEY`                | Yes      | Steam Web API key ([get one here](https://steamcommunity.com/dev/apikey)). Also used as the session-signing fallback if `SESSION_SECRET` is unset. |
+| `ADMIN_STEAM_ID`               | No       | Your Steam64 ID. Always whitelisted and granted access to `/admin`.                                                                                |
+| `STEAM_WHITELIST_IDS`          | No       | Comma-separated Steam64 IDs allowed in addition to `ADMIN_STEAM_ID` and the DB-backed whitelist.                                                   |
+| `NEXTAUTH_URL`                 | No       | Base URL used as the Steam OpenID realm/return_to and for absolute metadata URLs. Falls back to the request origin.                                |
+| `SQLITE_PATH`                  | No       | Overrides the SQLite database file path (defaults to `/data/` when writable, else `.data/` in the project root).                                   |
+| `STEAM_MARKET_CURRENCY`        | No       | Currency used to value inventories via the Steam Market: `USD` \| `GBP` \| `EUR` (default `USD`).                                                  |
+| `CRON_SECRET`                  | No       | Bearer token required by `GET /api/cron/snapshot-inventory`. The daily snapshot cron fails closed if this is unset.                                |
+| `SESSION_SECRET`               | No       | HMAC key used to sign the session cookie. Falls back to `STEAM_API_KEY` if unset.                                                                  |
+| `NODE_ENV`                     | No       | `development` \| `production` \| `test` (default `development`). Usually set automatically by tooling.                                             |
+| `NEXT_PUBLIC_APP_VERSION`      | No       | App version shown in the UI footer (build-time, public).                                                                                           |
+| `NEXT_PUBLIC_DISPLAY_TIMEZONE` | No       | IANA timezone used to render timestamps in the UI. Falls back to the browser's timezone.                                                           |
+| `LOG_LEVEL`                    | No       | Pino log level (default `info`).                                                                                                                   |
 
 ## Scripts
 
 ```bash
-pnpm dev          # dev server
-pnpm build        # production build (standalone)
-pnpm lint         # oxlint + typecheck
-pnpm test         # run tests
-pnpm format       # oxfmt
+pnpm dev            # dev server
+pnpm build          # production build (standalone)
+pnpm lint           # oxlint + typecheck
+pnpm typecheck      # next typegen + tsc --noEmit
+pnpm test           # run tests (vitest)
+pnpm test:coverage  # run tests with coverage
+pnpm format         # oxfmt format all files
+pnpm format:check   # oxfmt --check (no writes)
 ```
 
 ## Database migrations
