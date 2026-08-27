@@ -16,6 +16,11 @@ let currentUserState: CurrentUserState = {
   loading: true,
 }
 let inFlightRequest: Promise<void> | null = null
+// Bumped every time an in-flight request is superseded (revalidation or a
+// logout-triggered clear). A fetch only applies its result if the counter
+// still matches the value it captured when it started, so a slow, stale
+// response can never clobber the state written by a newer request.
+let requestGeneration = 0
 
 function emitState(nextState: CurrentUserState) {
   currentUserState = nextState
@@ -49,11 +54,15 @@ async function ensureCurrentUserLoaded(options?: { force?: boolean }): Promise<v
     return
   }
 
+  const generation = ++requestGeneration
+
   inFlightRequest = (async () => {
     try {
       const res = await fetch("/api/auth/me")
+      if (generation !== requestGeneration) return
       if (res.ok) {
         const data = (await res.json()) as AuthMeResponse
+        if (generation !== requestGeneration) return
         emitState({ user: data.user, loading: false })
       } else if (res.status >= 500) {
         toast({
@@ -66,6 +75,7 @@ async function ensureCurrentUserLoaded(options?: { force?: boolean }): Promise<v
         emitState({ ...currentUserState, loading: false })
       }
     } catch {
+      if (generation !== requestGeneration) return
       toast({
         title: "Network error",
         description: "Could not connect to the authentication server.",
@@ -73,7 +83,12 @@ async function ensureCurrentUserLoaded(options?: { force?: boolean }): Promise<v
       })
       emitState({ ...currentUserState, loading: false })
     } finally {
-      inFlightRequest = null
+      // Only the request that owns the current generation may clear the
+      // in-flight marker — a superseded request must leave it for whichever
+      // request replaced it.
+      if (generation === requestGeneration) {
+        inFlightRequest = null
+      }
     }
   })()
 
@@ -81,11 +96,13 @@ async function ensureCurrentUserLoaded(options?: { force?: boolean }): Promise<v
 }
 
 async function revalidateCurrentUser(): Promise<void> {
+  requestGeneration++
   inFlightRequest = null
   return ensureCurrentUserLoaded({ force: true })
 }
 
 export function clearCurrentUser() {
+  requestGeneration++
   inFlightRequest = null
   emitState({ user: null, loading: false })
 }
