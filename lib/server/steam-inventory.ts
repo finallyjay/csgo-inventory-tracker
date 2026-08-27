@@ -258,6 +258,15 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+// Dedupes concurrent live fetches per steamId. Without this, a cache miss hit
+// by two requests at once (e.g. the /inventory page load and a "Sync now"
+// click, or a cron overlapping either) each pages Steam independently — a
+// cache-stampede that multiplies load and rate-limit exposure. The second
+// (and any later) caller instead awaits the first caller's in-flight promise.
+// Cleared in a `finally` on settle (success or failure) so a rejected fetch
+// isn't cached and the next call gets a fresh attempt.
+const inFlightRawFetches = new Map<string, Promise<RawInventoryResponse>>()
+
 /**
  * Fetches a URL, retrying on 429 and 5xx responses with the given waits between
  * attempts (honoring a sane `Retry-After` header when Steam sends one). Returns
@@ -292,12 +301,28 @@ export async function fetchWithBackoff(
  * {@link InventoryFetchError} on a private/inaccessible inventory (400/403),
  * rate limit (429), or any other non-OK / unsuccessful response.
  *
+ * Concurrent cache-miss callers for the same `steamId` (e.g. an /inventory
+ * page load racing a "Sync now" click, or a cron overlapping either) share a
+ * single in-flight live fetch instead of each paging Steam independently — see
+ * {@link inFlightRawFetches}.
+ *
  * @throws InventoryFetchError
  */
 async function fetchInventoryRaw(steamId: string): Promise<RawInventoryResponse> {
   const cached = getCachedRawInventory(steamId)
   if (cached) return cached
 
+  const inFlight = inFlightRawFetches.get(steamId)
+  if (inFlight) return inFlight
+
+  const promise = fetchAndCacheInventory(steamId).finally(() => {
+    inFlightRawFetches.delete(steamId)
+  })
+  inFlightRawFetches.set(steamId, promise)
+  return promise
+}
+
+async function fetchAndCacheInventory(steamId: string): Promise<RawInventoryResponse> {
   const merged: Required<Pick<RawInventoryResponse, "assets" | "descriptions">> & RawInventoryResponse = {
     assets: [],
     descriptions: [],
