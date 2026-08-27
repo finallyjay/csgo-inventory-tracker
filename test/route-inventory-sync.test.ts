@@ -1,4 +1,7 @@
-import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest"
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from "vitest"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { rmSync } from "node:fs"
 import type { SteamUser } from "@/lib/auth"
 
 // getCurrentUser() reads from next/headers cookies() + verifySession(), which
@@ -29,21 +32,33 @@ const USER: SteamUser = {
   profileUrl: "https://steamcommunity.com/profiles/76561197960287930",
 }
 
+// lib/server/rate-limit.ts persists buckets in sqlite (not an in-memory Map),
+// so exercising its public rateLimit() API needs a real (temp) DB file, same
+// as test/rate-limit.test.ts.
+const dbPath = join(tmpdir(), `csgo-sync-route-test-${process.pid}.sqlite`)
+
 beforeAll(() => {
+  process.env.SQLITE_PATH = dbPath
   // env.STEAM_MARKET_CURRENCY is read (triggering full env validation) once a
   // request gets past auth + rate limiting, so STEAM_API_KEY must be present
   // even though this suite never talks to Steam.
   process.env.STEAM_API_KEY = "test-api-key"
 })
 
-beforeEach(() => {
-  // Fresh module registry per test: the route pulls in
-  // lib/server/rate-limit.ts, whose limiter state lives in a module-scoped
-  // Map, so resetting modules gives every test its own untouched budget
-  // instead of bleeding state across tests in this file.
+afterAll(() => {
+  for (const suffix of ["", "-wal", "-shm"]) rmSync(dbPath + suffix, { force: true })
+})
+
+beforeEach(async () => {
+  // Fresh module registry per test, and a cleared rate_limit_bucket table:
+  // buckets now persist in sqlite (keyed by `inv-sync:<steamId>`), so without
+  // this every test after the first would inherit the previous test's spent
+  // budget for the same user.
   vi.resetModules()
   getCurrentUserMock.mockReset()
   computeInventoryValueMock.mockReset()
+  const { getSqliteDatabase } = await import("@/lib/server/sqlite")
+  getSqliteDatabase().prepare("DELETE FROM rate_limit_bucket").run()
 })
 
 describe("POST /api/inventory/sync — auth contract", () => {
@@ -89,11 +104,11 @@ describe("POST /api/inventory/sync — rate limit contract", () => {
       truncated: false,
     })
 
-    // Sanity check on the test itself: a user who hasn't touched the
-    // limiter yet must not hit 429 (otherwise the 429 assertion above could
-    // be a false positive from some other failure mode, e.g. a shared
-    // limiter key). computeInventoryValue is mocked at file scope so this
-    // never touches sqlite or the network.
+    // Sanity check on the test itself: a user whose budget was just cleared
+    // (see beforeEach) must not hit 429 (otherwise the 429 assertion above
+    // could be a false positive from some other failure mode, e.g. a bucket
+    // that never got cleared). computeInventoryValue is mocked at file scope
+    // so this test still never touches the network.
     const { POST } = await import("@/app/api/inventory/sync/route")
     const res = await POST()
     expect(res.status).toBe(200)
