@@ -52,6 +52,13 @@ export interface RawInventoryResponse {
   /** 1 when more pages remain; pass `last_assetid` as `start_assetid` to fetch them. */
   more_items?: number
   last_assetid?: string
+  /**
+   * Not a Steam field — set locally by {@link fetchAndCacheInventory} when
+   * pagination stops at `MAX_INVENTORY_PAGES` while Steam still reports
+   * `more_items`. Marks the cached/merged payload (and anything parsed from
+   * it) as an incomplete snapshot of the real inventory.
+   */
+  truncated?: boolean
 }
 
 /** A fully-described inventory line: one unique item with the count owned. */
@@ -86,6 +93,12 @@ export interface DetailedInventory {
    * held items are excluded from this count entirely, so they can't be detected.)
    */
   steamReportedCount: number
+  /**
+   * True when pagination hit `MAX_INVENTORY_PAGES` while Steam still reported
+   * `more_items` — `items`/`totalItemCount` undercount the real inventory. See
+   * {@link RawInventoryResponse.truncated}.
+   */
+  truncated: boolean
 }
 
 /** A unique marketable item with the number of copies owned (for valuation). */
@@ -99,6 +112,8 @@ export interface ParsedInventory {
   items: InventoryItem[]
   /** Count of every asset in the inventory, marketable or not. */
   totalItemCount: number
+  /** See {@link DetailedInventory.truncated}. */
+  truncated: boolean
 }
 
 const STEAM_IMAGE_BASE = "https://community.fastly.steamstatic.com/economy/image"
@@ -190,6 +205,7 @@ export function parseInventoryItems(raw: RawInventoryResponse): DetailedInventor
     items: [...byKey.values()],
     totalItemCount,
     steamReportedCount: raw.total_inventory_count ?? totalItemCount,
+    truncated: Boolean(raw.truncated),
   }
 }
 
@@ -198,12 +214,13 @@ export function parseInventoryItems(raw: RawInventoryResponse): DetailedInventor
  * {@link parseInventoryItems} so there is a single source of truth.
  */
 export function parseInventory(raw: RawInventoryResponse): ParsedInventory {
-  const { items, totalItemCount } = parseInventoryItems(raw)
+  const { items, totalItemCount, truncated } = parseInventoryItems(raw)
   return {
     items: items
       .filter((i) => i.marketable && i.marketHashName)
       .map((i) => ({ marketHashName: i.marketHashName as string, count: i.count })),
     totalItemCount,
+    truncated,
   }
 }
 
@@ -241,7 +258,7 @@ export function inventoryErrorInfo(status: number): { status: number; message: s
 // Steam rejects large `count` values with HTTP 400; 2000 is the safe page size.
 // Inventories bigger than one page are walked via `start_assetid`.
 const INVENTORY_PAGE_SIZE = 2000
-const MAX_INVENTORY_PAGES = 10
+export const MAX_INVENTORY_PAGES = 10
 
 // Waits between retries of a throttled inventory request. Steam rate-limits the
 // public inventory endpoint per IP (datacenter IPs especially), and a burst
@@ -331,6 +348,7 @@ async function fetchAndCacheInventory(steamId: string): Promise<RawInventoryResp
   }
 
   let startAssetId: string | undefined
+  let lastPage: RawInventoryResponse | undefined
 
   for (let page = 0; page < MAX_INVENTORY_PAGES; page++) {
     const url = new URL(`https://steamcommunity.com/inventory/${steamId}/${CS2_APP_ID}/${CS2_CONTEXT_ID}`)
@@ -352,9 +370,23 @@ async function fetchAndCacheInventory(steamId: string): Promise<RawInventoryResp
     merged.assets.push(...(raw.assets ?? []))
     merged.descriptions.push(...(raw.descriptions ?? []))
     merged.total_inventory_count = raw.total_inventory_count ?? merged.total_inventory_count
+    lastPage = raw
 
     if (!raw.more_items || !raw.last_assetid) break
     startAssetId = raw.last_assetid
+  }
+
+  // The loop above stops after MAX_INVENTORY_PAGES iterations even if Steam
+  // still has more pages queued (`more_items` still set on the last page we
+  // fetched). Without this check that leaves an incomplete inventory cached
+  // for INVENTORY_CACHE_TTL_MS with no signal — the item list and valuation
+  // silently undercount. Flag it loudly instead.
+  if (lastPage?.more_items && lastPage.last_assetid) {
+    merged.truncated = true
+    logger.warn(
+      { steamId, pages: MAX_INVENTORY_PAGES, assetCount: merged.assets.length },
+      "Inventory pagination hit MAX_INVENTORY_PAGES while Steam still reports more_items; caching a truncated inventory",
+    )
   }
 
   setCachedRawInventory(steamId, merged)

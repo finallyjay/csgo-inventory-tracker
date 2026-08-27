@@ -63,7 +63,7 @@ Validated lazily with Zod in `lib/env.ts`:
 - `SQLITE_PATH` — overrides DB path (`/data/` → `.data/` fallback)
 - `STEAM_MARKET_CURRENCY` — `USD` | `GBP` | `EUR` (default USD)
 - `CRON_SECRET` — Bearer token required by the daily snapshot cron
-- `SESSION_SECRET` — optional HMAC key for the session cookie (falls back to `STEAM_API_KEY`)
+- `SESSION_SECRET` — HMAC key for the session cookie; required in production (falls back to `STEAM_API_KEY` in development/test only)
 - `NEXT_PUBLIC_DISPLAY_TIMEZONE` — optional IANA tz for the UI (build-time; falls back to the browser tz)
 
 ### Dates & timezones

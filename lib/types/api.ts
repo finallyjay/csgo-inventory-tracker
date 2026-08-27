@@ -83,6 +83,12 @@ export type InventoryItemsResponse = {
   pricedRows: number
   /** True when no prices are cached yet (prompt the user to sync). */
   needsSync: boolean
+  /**
+   * True when Steam's pagination wasn't fully walked (the inventory has more
+   * pages than we fetch) — items/totalItemCount undercount the real inventory,
+   * distinct from the `steamReportedCount` lag above.
+   */
+  truncated: boolean
 }
 
 export type HoldingItem = {

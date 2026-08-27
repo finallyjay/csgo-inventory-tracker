@@ -18,6 +18,8 @@ export interface ValuationResult {
   pricedItemCount: number
   /** Unique marketable names whose price was missing. */
   unpricedNames: number
+  /** True when Steam's pagination wasn't fully walked — this undercounts the real inventory. */
+  truncated: boolean
 }
 
 export interface ComputeOptions extends GetPricesOptions {
@@ -89,6 +91,7 @@ export async function computeInventoryValue(steamId: string, options: ComputeOpt
     itemCount: detailed.totalItemCount,
     pricedItemCount,
     unpricedNames,
+    truncated: detailed.truncated,
   }
 
   if (options.persist !== false) {
