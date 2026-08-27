@@ -161,3 +161,66 @@ describe("getPrices 429 handling", () => {
     expect(result.skipped).toEqual(["Fetch | me"])
   })
 })
+
+describe("getPrices maxFetches", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it("stops issuing live fetches once the cap is hit, leaving the rest skipped", async () => {
+    const currency = "TCAP1"
+    const names = ["A | one", "B | two", "C | three"]
+
+    const fetchMock = vi.fn().mockResolvedValue(priceResponse("$1.00"))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const result = await getPrices(names, currency, { delayMs: 0, maxFetches: 2 })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(result.fetched).toBe(2)
+    expect(result.skipped).toEqual(["C | three"])
+    expect(result.rateLimited).toBe(false)
+  })
+
+  it("counts a 429 backoff-retry against the cap, so total live requests never exceed maxFetches", async () => {
+    // maxFetches: 1 leaves no budget for a retry: the first name's own 429
+    // consumes the entire cap, so it must not retry even though Steam sent a
+    // Retry-After. This is the scenario a retry-unaware cap would blow past
+    // (up to 2x the intended request count).
+    const currency = "TCAP2"
+    const names = ["A | one", "B | two"]
+
+    const fetchMock = vi.fn().mockResolvedValue(rateLimitResponse("0"))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const result = await getPrices(names, currency, { delayMs: 0, maxFetches: 1 })
+
+    // Exactly one HTTP request total: no retry, and the second name is never touched.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(result.fetched).toBe(0)
+    expect(result.skipped).toEqual(names)
+    // Our own cap ran out, not persistent Steam throttling — don't misreport it as such.
+    expect(result.rateLimited).toBe(false)
+  })
+
+  it("still allows the one retry it has budget for, then caps the rest", async () => {
+    const currency = "TCAP3"
+    const names = ["A | one", "B | two"]
+
+    const fetchMock = vi
+      .fn()
+      // Name A: 429 with Retry-After 0 → one retry fits under maxFetches: 2 → succeeds.
+      .mockResolvedValueOnce(rateLimitResponse("0"))
+      .mockResolvedValueOnce(priceResponse("$1.00"))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const result = await getPrices(names, currency, { delayMs: 0, maxFetches: 2 })
+
+    // 2 requests spent on name A (initial + retry); no budget left for name B.
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(result.fetched).toBe(1)
+    expect(result.prices.get(names[0])).toBe(100)
+    expect(result.skipped).toEqual(["B | two"])
+    expect(result.rateLimited).toBe(false)
+  })
+})
