@@ -176,6 +176,29 @@ export const MIGRATIONS: readonly Migration[] = [
       `)
     },
   },
+  {
+    version: 3,
+    name: "rate limit buckets",
+    up(db) {
+      db.exec(`
+        -- Persisted sliding-window rate-limit buckets (see lib/server/rate-limit.ts).
+        -- Previously an in-memory Map, which resets on every cold start and isn't
+        -- shared across serverless instances -- letting a caller blow through the
+        -- limit once per instance. 'timestamps' is a JSON array of epoch-ms request
+        -- times that were still inside the window as of the last write for that key;
+        -- 'updated_at' (epoch ms) drives the cheap TTL sweep that deletes buckets no
+        -- caller has touched in a while, so the table doesn't grow unbounded.
+        CREATE TABLE IF NOT EXISTS rate_limit_bucket (
+          key TEXT PRIMARY KEY,
+          timestamps TEXT NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_rate_limit_bucket_updated_at
+          ON rate_limit_bucket (updated_at);
+      `)
+    },
+  },
 ]
 
 /** The version a fully-migrated database should be at. */
