@@ -7,7 +7,7 @@ const envSchema = z
   .object({
     STEAM_API_KEY: z.string().min(1, "STEAM_API_KEY is required"),
     STEAM_WHITELIST_IDS: z.string().optional(),
-    NEXTAUTH_URL: z.string().url().optional(),
+    NEXTAUTH_URL: z.url().optional(),
     SQLITE_PATH: z.string().optional(),
     ADMIN_STEAM_ID: z.string().optional(),
     // Currency used to value inventories (Steam Market). One of USD | GBP | EUR.
