@@ -122,6 +122,7 @@ describe("runMigrations on a fresh database", () => {
       "item",
       "item_price_history",
       "market_price_cache",
+      "rate_limit_bucket",
       "steam_profile",
     ])
   })
