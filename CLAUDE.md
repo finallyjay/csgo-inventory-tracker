@@ -14,16 +14,16 @@ pnpm format           # oxfmt format all files
 pnpm exec vitest run test/<file>.test.ts  # Run single test file
 ```
 
-CI runs: install → lint → test → build (GitHub Actions, on push to main and PRs).
+CI runs: install → lint → test:coverage → build (GitHub Actions, on push to main and PRs).
 Pre-commit hooks run oxfmt + oxlint via Husky + lint-staged.
 
 ## Architecture
 
-Next.js 16 App Router with React 19, TypeScript strict mode, Tailwind CSS 4, shadcn/ui (new-york style) + Radix UI primitives. Uses pnpm 10.25 and Node 24.13.
+Next.js 16 App Router with React 19, TypeScript strict mode, Tailwind CSS 4, shadcn/ui (new-york style) + Radix UI primitives. Uses pnpm 11.7 (see `packageManager` in `package.json`) and Node 24 (see `.nvmrc`; `engines` requires `>=24 <25` — the CI runner tracks the Node 24 LTS line rather than a pinned patch version).
 
 This project was bootstrapped from the `steam-backlog-hunter` base and shares its
-retro arcade / CRT aesthetic. Steam OpenID login + a whitelist are wired up; the
-inventory domain logic (CS:GO / CS2) is not yet implemented.
+retro arcade / CRT aesthetic. Steam OpenID login, a whitelist, and the full CS:GO / CS2
+inventory valuation pipeline (see below) are implemented.
 
 ### Auth & whitelist
 
@@ -79,7 +79,11 @@ as ISO UTC). `lib/datetime.ts` is the client display layer: `formatDay()` render
 
 SQLite via Node's built-in `node:sqlite` (`lib/server/sqlite.ts`). Tables:
 `steam_profile` (cached public profiles), `allowed_users` (persisted whitelist),
-`inventory_value_history` (one daily snapshot of total inventory value per user).
+`inventory_value_history` (one daily total-value snapshot per user), `market_price_cache`
+(shared latest-price cache keyed by item + currency), `item_price_history` (per-item
+daily price history), `item` (cached item metadata: icon, rarity, type, exterior),
+`inventory_holdings` (per-day full holdings snapshot per user, including stickers), and
+`inventory_raw_cache` (short-TTL cache of the raw Steam inventory payload per user).
 Schema changes go through the versioned migration system in
 `lib/server/migrations.ts` (append-only list, `PRAGMA user_version` bookkeeping —
 see the how-to comment there). Structured logging via Pino (`lib/server/logger.ts`).
