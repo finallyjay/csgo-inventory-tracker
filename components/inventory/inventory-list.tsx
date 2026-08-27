@@ -215,6 +215,16 @@ export function InventoryList() {
         </Alert>
       )}
 
+      {data?.truncated && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Your inventory is too large to load in one pass — this list and its total value only reflect the first part
+            of it. Steam still has more items queued; try again shortly.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {data && data.steamReportedCount > data.totalItemCount && (
         <Alert>
           <Info className="h-4 w-4" />

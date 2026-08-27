@@ -93,6 +93,7 @@ export async function GET() {
     totalValue,
     pricedRows,
     needsSync: pricedRows === 0 && items.some((i) => i.marketable),
+    truncated: detailed.truncated,
   }
 
   return NextResponse.json(response)
