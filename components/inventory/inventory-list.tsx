@@ -120,9 +120,10 @@ export function InventoryList() {
   // `background` keeps the current list on screen (no skeleton swap) so the
   // price roll animations can play in place after a sync — including on
   // failure, where it toasts instead of wiping the mounted list.
+  // No setState before the first await: the mount effect is the only
+  // non-background caller and `loading: true` / `error: null` is already the
+  // initial state (oxlint react/set-state-in-effect).
   const load = useCallback(async (background = false) => {
-    if (!background) setLoading(true)
-    setError(null)
     try {
       const res = await fetch("/api/inventory/items", { cache: "no-store" })
       const body = await res.json()
@@ -136,6 +137,7 @@ export function InventoryList() {
         setData(null)
         return
       }
+      setError(null)
       setData(body as InventoryItemsResponse)
     } catch {
       if (background) {
@@ -149,7 +151,10 @@ export function InventoryList() {
   }, [])
 
   useEffect(() => {
-    void load()
+    async function run() {
+      await load()
+    }
+    void run()
   }, [load])
 
   async function handleSync() {

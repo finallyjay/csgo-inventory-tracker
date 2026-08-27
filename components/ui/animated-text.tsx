@@ -42,7 +42,10 @@ export function AnimatedText({ text, className }: AnimatedTextProps) {
   const [display, setDisplay] = useState(() => text.replace(/\d/g, "0"))
 
   useEffect(() => {
-    setDisplay(text)
+    // Deferred to the next frame so the masked first paint stays on screen
+    // for a beat (and to keep the setState out of the synchronous effect body).
+    const frame = requestAnimationFrame(() => setDisplay(text))
+    return () => cancelAnimationFrame(frame)
   }, [text])
 
   if (reducedMotion) {
