@@ -50,7 +50,7 @@ ones. Copy `.env.example` to `.env` and fill it in.
 | `SQLITE_PATH`                  | No       | Overrides the SQLite database file path (defaults to `/data/` when writable, else `.data/` in the project root).                                   |
 | `STEAM_MARKET_CURRENCY`        | No       | Currency used to value inventories via the Steam Market: `USD` \| `GBP` \| `EUR` (default `USD`).                                                  |
 | `CRON_SECRET`                  | No       | Bearer token required by `GET /api/cron/snapshot-inventory`. The daily snapshot cron fails closed if this is unset.                                |
-| `SESSION_SECRET`               | No       | HMAC key used to sign the session cookie. Falls back to `STEAM_API_KEY` if unset.                                                                  |
+| `SESSION_SECRET`               | Yes\*    | HMAC key used to sign the session cookie. \*Required in production; falls back to `STEAM_API_KEY` in development/test only.                        |
 | `NODE_ENV`                     | No       | `development` \| `production` \| `test` (default `development`). Usually set automatically by tooling.                                             |
 | `NEXT_PUBLIC_APP_VERSION`      | No       | App version shown in the UI footer (build-time, public).                                                                                           |
 | `NEXT_PUBLIC_DISPLAY_TIMEZONE` | No       | IANA timezone used to render timestamps in the UI. Falls back to the browser's timezone.                                                           |
