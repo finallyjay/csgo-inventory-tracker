@@ -10,9 +10,11 @@ import {
   fetchWithBackoff,
   fetchInventory,
   fetchInventoryItems,
+  MAX_INVENTORY_PAGES,
   type RawInventoryResponse,
 } from "@/lib/server/steam-inventory"
 import { getSqliteDatabase } from "@/lib/server/sqlite"
+import { logger } from "@/lib/server/logger"
 
 const RAW: RawInventoryResponse = {
   success: 1,
@@ -49,7 +51,7 @@ describe("parseInventory", () => {
   })
 
   it("handles an empty / malformed payload", () => {
-    expect(parseInventory({})).toEqual({ items: [], totalItemCount: 0 })
+    expect(parseInventory({})).toEqual({ items: [], totalItemCount: 0, truncated: false })
   })
 })
 
@@ -129,6 +131,17 @@ describe("parseInventoryItems (detailed)", () => {
   it("falls back to the received count when Steam omits total_inventory_count", () => {
     const parsed = parseInventoryItems(RICH) // no total_inventory_count
     expect(parsed.steamReportedCount).toBe(parsed.totalItemCount)
+  })
+
+  it("defaults truncated to false when the raw payload doesn't set it", () => {
+    expect(parseInventoryItems(RAW).truncated).toBe(false)
+    expect(parseInventory(RAW).truncated).toBe(false)
+  })
+
+  it("propagates raw.truncated through both parseInventoryItems and parseInventory", () => {
+    const truncatedRaw = { ...RAW, truncated: true }
+    expect(parseInventoryItems(truncatedRaw).truncated).toBe(true)
+    expect(parseInventory(truncatedRaw).truncated).toBe(true)
   })
 })
 
@@ -361,6 +374,79 @@ describe("fetchInventoryRaw in-flight dedup (via fetchInventory / fetchInventory
     const result = await fetchInventory(steamId)
     expect(succeeding).toHaveBeenCalledTimes(1)
     expect(result.items).toHaveLength(1)
+  })
+})
+
+describe("inventory pagination truncation (via fetchInventoryItems)", () => {
+  const dbPath = join(tmpdir(), `csgo-inventory-truncation-test-${process.pid}.sqlite`)
+
+  beforeAll(() => {
+    process.env.SQLITE_PATH = dbPath
+  })
+
+  afterAll(() => {
+    for (const suffix of ["", "-wal", "-shm"]) rmSync(dbPath + suffix, { force: true })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  function clearCache(steamId: string) {
+    getSqliteDatabase().prepare("DELETE FROM inventory_raw_cache WHERE steam_id = ?").run(steamId)
+  }
+
+  /** A page that always claims more items remain, so pagination never stops on its own. */
+  function openEndedPage(page: number): RawInventoryResponse {
+    return {
+      success: 1,
+      assets: [{ classid: "1", instanceid: "0", amount: "1" }],
+      descriptions: [
+        { classid: "1", instanceid: "0", market_hash_name: "AK-47 | Redline (Field-Tested)", marketable: 1 },
+      ],
+      more_items: 1,
+      last_assetid: `asset-${page}`,
+    }
+  }
+
+  it("warns and flags the result truncated when more_items is still set after MAX_INVENTORY_PAGES", async () => {
+    const steamId = "76561198000000201"
+    clearCache(steamId)
+
+    const mock = vi.fn()
+    for (let page = 0; page < MAX_INVENTORY_PAGES; page++) {
+      mock.mockResolvedValueOnce(new Response(JSON.stringify(openEndedPage(page)), { status: 200 }))
+    }
+    vi.stubGlobal("fetch", mock)
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => logger)
+
+    const detailed = await fetchInventoryItems(steamId)
+
+    // Stops exactly at the page cap, never asking Steam for an 11th page.
+    expect(mock).toHaveBeenCalledTimes(MAX_INVENTORY_PAGES)
+    expect(detailed.truncated).toBe(true)
+
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    const [meta, message] = warnSpy.mock.calls[0]
+    expect(meta).toMatchObject({ steamId, pages: MAX_INVENTORY_PAGES })
+    expect(message).toMatch(/truncat/i)
+  })
+
+  it("does not warn or flag truncated when the last page reports no more items", async () => {
+    const steamId = "76561198000000202"
+    clearCache(steamId)
+
+    const finalPage: RawInventoryResponse = { ...openEndedPage(0), more_items: undefined, last_assetid: undefined }
+    const mock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(finalPage), { status: 200 }))
+    vi.stubGlobal("fetch", mock)
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => logger)
+
+    const detailed = await fetchInventoryItems(steamId)
+
+    expect(mock).toHaveBeenCalledTimes(1)
+    expect(detailed.truncated).toBe(false)
+    expect(warnSpy).not.toHaveBeenCalled()
   })
 })
 
