@@ -4,9 +4,10 @@ import crypto from "node:crypto"
 import { env } from "@/lib/env"
 import type { SteamUser } from "@/lib/auth"
 
-// HMAC key for signing the session cookie. A dedicated SESSION_SECRET is
-// preferred; we fall back to STEAM_API_KEY (also a server-only secret) so
-// sessions are tamper-proof without requiring a new env var.
+// HMAC key for signing the session cookie. SESSION_SECRET is required in
+// production (see lib/env.ts); in development/test only, we fall back to
+// STEAM_API_KEY (also a server-only secret) so sessions are tamper-proof
+// without requiring a new env var.
 function signingKey(): string {
   return env.SESSION_SECRET || env.STEAM_API_KEY
 }
