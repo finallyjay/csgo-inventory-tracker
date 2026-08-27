@@ -54,9 +54,11 @@ export function InventoryValuePanel() {
   }, [])
 
   // Loads the holdings composition for a given day (latest when omitted) and
-  // syncs `selectedDate` to whatever day the API resolved.
-  const loadHoldings = useCallback(async (d?: string) => {
-    setHoldingsLoading(true)
+  // syncs `selectedDate` to whatever day the API resolved. Core has no setState
+  // before the first await so the mount effect can call it directly (oxlint
+  // react/set-state-in-effect); event handlers use `loadHoldings`, which flips
+  // the dimming flag first.
+  const fetchHoldings = useCallback(async (d?: string) => {
     try {
       const url = d ? `/api/inventory/holdings?date=${encodeURIComponent(d)}` : "/api/inventory/holdings"
       const res = await fetch(url, { cache: "no-store" })
@@ -69,10 +71,20 @@ export function InventoryValuePanel() {
     }
   }, [])
 
+  const loadHoldings = useCallback(
+    (d?: string) => {
+      setHoldingsLoading(true)
+      return fetchHoldings(d)
+    },
+    [fetchHoldings],
+  )
+
   useEffect(() => {
-    void load()
-    void loadHoldings()
-  }, [load, loadHoldings])
+    async function run() {
+      await Promise.all([load(), fetchHoldings()])
+    }
+    void run()
+  }, [load, fetchHoldings])
 
   // Pick a day (from a chart click or the arrows) and refresh the table below.
   const selectDay = useCallback(
