@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react"
+import { act, cleanup, render } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { AnimatedText } from "@/components/ui/animated-text"
 
@@ -13,12 +13,24 @@ function mockMatchMedia(matches: boolean) {
   )
 }
 
+// The roll-in setState is deferred to the next animation frame, so tests flush
+// one frame before asserting on the rolled-in text.
+async function flushFrame() {
+  await act(async () => {
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
+  })
+}
+
 afterEach(() => {
+  // Unmount before removing the matchMedia stub: a still-mounted AnimatedText
+  // holds a pending animation frame whose setState would re-read matchMedia
+  // after the stub is gone. (No vitest globals, so no auto-cleanup.)
+  cleanup()
   vi.unstubAllGlobals()
 })
 
 describe("AnimatedText", () => {
-  it("renders the text through slot-text when motion is allowed", () => {
+  it("renders the text through slot-text when motion is allowed", async () => {
     mockMatchMedia(false)
     const { container } = render(<AnimatedText text="$1,234.56" />)
     // The accessible name — not textContent — is the contract: in a browser
@@ -29,6 +41,9 @@ describe("AnimatedText", () => {
     const root = container.querySelector("span")
     expect(root).not.toBeNull()
     expect(root).toHaveAttribute("aria-label", "$1,234.56")
+    // First paint masks the digits; the real value rolls in a frame later.
+    expect(root?.textContent).toBe("$0,000.00")
+    await flushFrame()
     expect(root?.textContent).toBe("$1,234.56")
   })
 
