@@ -9,6 +9,30 @@ import { logger } from "@/lib/server/logger"
 export const maxDuration = 300
 
 /**
+ * Max age of a cached price a manual "Sync now" will accept before refetching
+ * it live (10 minutes). Matches `INVENTORY_CACHE_TTL_MS`
+ * (steam-inventory-cache.ts): the raw inventory behind this same request can't
+ * get any fresher than that 10-minute window, so refusing prices older than
+ * the same window is the tightest freshness "Sync now" can honestly promise —
+ * without it, a click seconds after the daily cron (or another user's sync)
+ * re-fetches every price live for no benefit. Deliberately tighter than
+ * `SNAPSHOT_MAX_PRICE_AGE_MS` (1h), which only needs to keep the automated
+ * daily snapshot from looking byte-for-byte identical day over day.
+ */
+const SYNC_MAX_PRICE_AGE_MS = 10 * 60 * 1000
+
+/**
+ * Hard cap on live Steam fetches per sync call. Each live fetch costs ~1.5s
+ * sequentially (`DEFAULT_DELAY_MS` in market-prices.ts), and this route's
+ * `maxDuration` is 300s, so an inventory with many uncached names could
+ * otherwise run right up against (or past) the timeout. 150 fetches costs
+ * ~225s of delay alone, leaving headroom for request/DB latency; names beyond
+ * the cap are reported as skipped by `getPrices` and simply count as unpriced
+ * for this run — the next cron pass or sync fills them in.
+ */
+const SYNC_MAX_PRICE_FETCHES = 150
+
+/**
  * POST /api/inventory/sync
  *
  * Values the authenticated user's CS2 inventory at today's Steam Market prices
@@ -31,12 +55,17 @@ export async function POST() {
   }
 
   try {
-    // Explicit user action: bypass the cache (maxAgeMs: 0) so a manual "Sync
-    // now" always reflects live Steam Market prices, never a cached number. The
-    // 3-per-5-min rate limit above keeps this from hammering Steam.
+    // Explicit user action: refetch any price cached more than 10 minutes ago
+    // (SYNC_MAX_PRICE_AGE_MS) instead of the 12h display cache, so "Sync now"
+    // reflects near-live Steam Market prices. This does NOT bypass the 10-min
+    // raw *inventory* cache (steam-inventory-cache.ts) — repeated clicks reuse
+    // the same fetched inventory; only prices older than the window above get
+    // refetched. The 3-per-5-min rate limit above, plus the fetch cap, keep
+    // this from hammering Steam or running past maxDuration.
     const result = await computeInventoryValue(user.steamId, {
       currency: env.STEAM_MARKET_CURRENCY,
-      maxAgeMs: 0,
+      maxAgeMs: SYNC_MAX_PRICE_AGE_MS,
+      maxFetches: SYNC_MAX_PRICE_FETCHES,
     })
     return NextResponse.json(result)
   } catch (err) {
