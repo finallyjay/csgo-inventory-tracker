@@ -156,4 +156,43 @@ describe("computeInventoryValue", () => {
     // 1 inventory call + 2 unique price calls = 3 (the duplicate AK is deduped).
     expect(spy.mock.calls.length).toBe(3)
   })
+
+  it("respects maxFetches: names beyond the cap are left unpriced instead of exceeding the live-fetch budget", async () => {
+    // A 4-unique-name inventory with none of them cached; maxFetches: 2 should
+    // still only ever issue 2 live price fetches (this is the guard "Sync now"
+    // relies on to stay well under maxDuration on a cold cache).
+    const MANY_INVENTORY = {
+      success: 1,
+      assets: [
+        { classid: "10", instanceid: "0", amount: "1" },
+        { classid: "11", instanceid: "0", amount: "1" },
+        { classid: "12", instanceid: "0", amount: "1" },
+        { classid: "13", instanceid: "0", amount: "1" },
+      ],
+      descriptions: [
+        { classid: "10", instanceid: "0", market_hash_name: "Item | One", marketable: 1 },
+        { classid: "11", instanceid: "0", market_hash_name: "Item | Two", marketable: 1 },
+        { classid: "12", instanceid: "0", market_hash_name: "Item | Three", marketable: 1 },
+        { classid: "13", instanceid: "0", market_hash_name: "Item | Four", marketable: 1 },
+      ],
+    }
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const url = String(input)
+      if (url.includes("/inventory/")) return { ok: true, json: async () => MANY_INVENTORY } as unknown as Response
+      return { ok: true, json: async () => ({ success: true, lowest_price: "$1.00" }) } as unknown as Response
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const result = await computeInventoryValue(STEAM_ID, {
+      currency: "USD",
+      delayMs: 0,
+      persist: false,
+      maxFetches: 2,
+    })
+
+    const priceCalls = fetchMock.mock.calls.filter(([input]) => String(input).includes("/market/priceoverview/"))
+    expect(priceCalls.length).toBe(2)
+    expect(result.pricedItemCount).toBe(2)
+    expect(result.unpricedNames).toBe(2)
+  })
 })
