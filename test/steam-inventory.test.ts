@@ -1,12 +1,18 @@
-import { describe, it, expect, vi, afterEach } from "vitest"
+import { describe, it, expect, vi, afterEach, beforeAll, afterAll } from "vitest"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { rmSync } from "node:fs"
 import {
   parseInventory,
   parseInventoryItems,
   parseStickers,
   inventoryErrorInfo,
   fetchWithBackoff,
+  fetchInventory,
+  fetchInventoryItems,
   type RawInventoryResponse,
 } from "@/lib/server/steam-inventory"
+import { getSqliteDatabase } from "@/lib/server/sqlite"
 
 const RAW: RawInventoryResponse = {
   success: 1,
@@ -257,6 +263,104 @@ describe("fetchWithBackoff", () => {
     const res = await fetchWithBackoff(url, [0, 0])
     expect(res.status).toBe(403)
     expect(mock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("fetchInventoryRaw in-flight dedup (via fetchInventory / fetchInventoryItems)", () => {
+  const dbPath = join(tmpdir(), `csgo-inventory-dedup-test-${process.pid}.sqlite`)
+
+  const ONE_PAGE: RawInventoryResponse = {
+    success: 1,
+    total_inventory_count: 1,
+    assets: [{ classid: "1", instanceid: "0", amount: "1" }],
+    descriptions: [
+      { classid: "1", instanceid: "0", market_hash_name: "AK-47 | Redline (Field-Tested)", marketable: 1 },
+    ],
+  }
+
+  beforeAll(() => {
+    process.env.SQLITE_PATH = dbPath
+  })
+
+  afterAll(() => {
+    for (const suffix of ["", "-wal", "-shm"]) rmSync(dbPath + suffix, { force: true })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function clearCache(steamId: string) {
+    getSqliteDatabase().prepare("DELETE FROM inventory_raw_cache WHERE steam_id = ?").run(steamId)
+  }
+
+  it("shares a single underlying fetch between two concurrent cache-miss requests for the same steamId", async () => {
+    const steamId = "76561198000000101"
+    clearCache(steamId)
+
+    const mock = vi.fn(
+      () =>
+        new Promise<Response>((resolve) =>
+          // A small delay so both concurrent calls are guaranteed to observe the
+          // cache miss before either finishes — reproducing the stampede window.
+          setTimeout(() => resolve(new Response(JSON.stringify(ONE_PAGE), { status: 200 })), 20),
+        ),
+    )
+    vi.stubGlobal("fetch", mock)
+
+    const [a, b] = await Promise.all([fetchInventory(steamId), fetchInventoryItems(steamId)])
+
+    expect(mock).toHaveBeenCalledTimes(1)
+    expect(a.items).toHaveLength(1)
+    expect(b.items).toHaveLength(1)
+  })
+
+  it("dedupes concurrent requests keyed per steamId (a different steamId still fetches independently)", async () => {
+    const steamIdA = "76561198000000102"
+    const steamIdB = "76561198000000103"
+    clearCache(steamIdA)
+    clearCache(steamIdB)
+
+    const mock = vi.fn(
+      () =>
+        new Promise<Response>((resolve) =>
+          setTimeout(() => resolve(new Response(JSON.stringify(ONE_PAGE), { status: 200 })), 20),
+        ),
+    )
+    vi.stubGlobal("fetch", mock)
+
+    await Promise.all([
+      fetchInventory(steamIdA),
+      fetchInventory(steamIdA),
+      fetchInventory(steamIdB),
+      fetchInventory(steamIdB),
+    ])
+
+    // One underlying fetch per distinct steamId, not one overall.
+    expect(mock).toHaveBeenCalledTimes(2)
+  })
+
+  it("does not cache a rejected in-flight promise: a later call retries after a failure", async () => {
+    const steamId = "76561198000000104"
+    clearCache(steamId)
+
+    // First attempt: a private inventory (403) — fetchWithBackoff does not
+    // retry this status, so it fails fast without waiting out real timers.
+    const failing = vi.fn(() => Promise.resolve(new Response("null", { status: 403 })))
+    vi.stubGlobal("fetch", failing)
+
+    await expect(fetchInventory(steamId)).rejects.toThrow()
+    expect(failing).toHaveBeenCalledTimes(1)
+
+    // Second attempt succeeds. If the failed in-flight promise had stuck
+    // around in the dedup map, this call would incorrectly reuse (and thus
+    // reject from) it instead of trying again.
+    const succeeding = vi.fn(() => Promise.resolve(new Response(JSON.stringify(ONE_PAGE), { status: 200 })))
+    vi.stubGlobal("fetch", succeeding)
+
+    const result = await fetchInventory(steamId)
+    expect(succeeding).toHaveBeenCalledTimes(1)
+    expect(result.items).toHaveLength(1)
   })
 })
 
