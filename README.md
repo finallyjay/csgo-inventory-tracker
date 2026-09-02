@@ -21,7 +21,7 @@ neon-lit place. Shares the retro arcade / CRT aesthetic and tooling base of
 - Tailwind CSS 4 + shadcn/ui (new-york) + Radix UI
 - `node:sqlite` for storage (prices cache, profiles, value snapshots)
 - Vitest + Testing Library
-- pnpm 11.7, Node 24.13
+- pnpm (pinned in `packageManager`), Node 24 (`.nvmrc`)
 - oxlint + oxfmt, Husky + lint-staged
 
 ## Getting started
