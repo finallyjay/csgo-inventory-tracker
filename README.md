@@ -1,5 +1,8 @@
 # CS:GO Inventory Tracker
 
+[![CI](https://github.com/finallyjay/csgo-inventory-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/finallyjay/csgo-inventory-tracker/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Track your CS:GO / CS2 inventory, item values and applied stickers — in one
 neon-lit place. Shares the retro arcade / CRT aesthetic and tooling base of
 [steam-backlog-hunter](https://github.com/finallyjay/steam-backlog-hunter).
