@@ -4,7 +4,7 @@ Thanks for your interest in contributing!
 
 ## Code of Conduct
 
-This project follows the [Contributor Covenant](./CODE_OF_CONDUCT.md). By
+This project follows the [Contributor Covenant](https://github.com/finallyjay/.github/blob/main/CODE_OF_CONDUCT.md). By
 participating, you're expected to uphold it. Report unacceptable behavior to
 **finallyjay@gmail.com**.
 
@@ -67,7 +67,7 @@ types are `feat`, `fix`, `chore`, `docs`, and `refactor`.
 Steam API keys, session secrets, and cron secrets are sensitive. Never log
 them, never expose them to client JS, and keep all handling of them
 server-side (see the "Environment variables" section of `CLAUDE.md`). If you
-find a vulnerability, please follow [SECURITY.md](./SECURITY.md) instead of
+find a vulnerability, please follow [SECURITY.md](https://github.com/finallyjay/csgo-inventory-tracker/security/policy) instead of
 opening a public issue.
 
 ## Pull requests
