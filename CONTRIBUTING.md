@@ -25,9 +25,10 @@ locally.
 
 ## Project layout
 
-See `CLAUDE.md` for an architecture overview (auth/whitelist, the inventory
-valuation pipeline, SQLite migrations, dates/timezones, etc.) — it's kept up
-to date and is the best starting point before making a non-trivial change.
+See the [Architecture](README.md#architecture) and
+[Database migrations](README.md#database-migrations) sections of the README
+for the auth/whitelist model, the inventory valuation pipeline and the
+migration system — the best starting point before a non-trivial change.
 
 ## Making a change
 
@@ -36,8 +37,8 @@ to date and is the best starting point before making a non-trivial change.
 2. Create a branch off `main` for the issue, e.g. `git checkout -b fix/123-short-description`.
 3. Keep changes focused — one logical change per pull request.
 4. Match the existing style: TypeScript strict, Next.js App Router
-   conventions, Tailwind design tokens (avoid hardcoded `bg-white/N` etc. —
-   see `CLAUDE.md`).
+   conventions, Tailwind design tokens from `app/globals.css` (avoid
+   hardcoded `bg-white/N` etc.).
 5. **Test your change**:
    - `pnpm test` — Vitest suite (`pnpm exec vitest run test/<file>.test.ts` to
      run a single file)
@@ -66,7 +67,7 @@ types are `feat`, `fix`, `chore`, `docs`, and `refactor`.
 
 Steam API keys, session secrets, and cron secrets are sensitive. Never log
 them, never expose them to client JS, and keep all handling of them
-server-side (see the "Environment variables" section of `CLAUDE.md`). If you
+server-side (see [Configuration](README.md#configuration) in the README). If you
 find a vulnerability, please follow [SECURITY.md](https://github.com/finallyjay/csgo-inventory-tracker/security/policy) instead of
 opening a public issue.
 
