@@ -98,4 +98,34 @@ To add a migration:
    inside a transaction.
 4. Add or extend coverage in `test/migrations.test.ts`.
 
-Not affiliated with Valve Corporation.
+## Architecture
+
+```
+Steam inventory → Steam Market prices (cached) → SQLite → API routes → UI
+```
+
+- `lib/server/steam-inventory.ts` fetches and parses the CS2 inventory; the raw payload is cached per user because Steam throttles the endpoint hard.
+- `lib/server/market-prices.ts` resolves prices through a shared `market_price_cache` table (12 h TTL) and only then falls back to the Steam Market, sequentially, to respect rate limits.
+- `lib/server/inventory-valuation.ts` computes the total and records one snapshot per user per day; `lib/server/item-price-history.ts` keeps the per-item series behind the detail pages.
+- `app/api/inventory/*` serves the dashboard and the inventory grid; `app/api/cron/snapshot-inventory` is the daily job, protected by `CRON_SECRET`.
+- Authentication is Steam OpenID with an HMAC-signed httpOnly session cookie and a whitelist (`ADMIN_STEAM_ID`, the `allowed_users` table, `STEAM_WHITELIST_IDS`), re-validated on every server call.
+
+Money is handled as integer minor units (cents) end to end; timestamps are stored in UTC and rendered in the viewer's timezone.
+
+## Deployment
+
+The app builds as a standalone Next.js output and runs anywhere Node 24 runs.
+
+1. Set the environment variables above on the platform (Dokploy, a container host, or a bare VPS).
+2. Mount a persistent volume for SQLite: set `SQLITE_PATH`, or mount at `/data/` and let the default resolution pick it up.
+3. Point a scheduler at `GET /api/cron/snapshot-inventory` once a day with `Authorization: Bearer $CRON_SECRET` (a system crontab or Vercel Cron both work).
+4. Set `NEXTAUTH_URL` to the public URL so Steam OpenID redirects back correctly.
+
+```bash
+pnpm build
+pnpm start
+```
+
+## License
+
+[MIT](LICENSE). Not affiliated with Valve Corporation.
