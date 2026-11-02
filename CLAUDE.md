@@ -19,7 +19,7 @@ Pre-commit hooks run oxfmt + oxlint via Husky + lint-staged.
 
 ## Architecture
 
-Next.js 16 App Router with React 19, TypeScript strict mode, Tailwind CSS 4, shadcn/ui (new-york style) + Radix UI primitives. Uses pnpm 12 (range in `devEngines.packageManager`, exact version locked in `pnpm-lock.yaml`) and Node 26 (see `.nvmrc`; `engines` requires `>=26 <27` — the CI runner tracks the Node 26 LTS line rather than a pinned patch version).
+Next.js 16 App Router with React 19, TypeScript strict mode, Tailwind CSS 4, shadcn/ui (new-york style) + Radix UI primitives. Uses pnpm 12 (range in `devEngines.packageManager`, exact version locked in `pnpm-lock.yaml`; `packageManager` mirrors that exact version because Railpack on Dokploy only reads that field — keep both, `pnpm self-update` updates them together) and Node 26 (see `.nvmrc`; `engines` requires `>=26 <27` — the CI runner tracks the Node 26 LTS line rather than a pinned patch version).
 
 This project was bootstrapped from the `steam-backlog-hunter` base and shares its
 retro arcade / CRT aesthetic. Steam OpenID login, a whitelist, and the full CS:GO / CS2
