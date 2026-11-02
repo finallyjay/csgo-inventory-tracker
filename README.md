@@ -24,7 +24,7 @@ neon-lit place. Shares the retro arcade / CRT aesthetic and tooling base of
 - Tailwind CSS 4 + shadcn/ui (new-york) + Radix UI
 - `node:sqlite` for storage (prices cache, profiles, value snapshots)
 - Vitest + Testing Library
-- pnpm (pinned in `packageManager`), Node 24 (`.nvmrc`)
+- pnpm (pinned in `packageManager`), Node 26 (`.nvmrc`)
 - oxlint + oxfmt, Husky + lint-staged
 
 ## Getting started
@@ -114,7 +114,7 @@ Money is handled as integer minor units (cents) end to end; timestamps are store
 
 ## Deployment
 
-The app builds as a standalone Next.js output and runs anywhere Node 24 runs.
+The app builds as a standalone Next.js output and runs anywhere Node 26 runs.
 
 1. Set the environment variables above on the platform (Dokploy, a container host, or a bare VPS).
 2. Mount a persistent volume for SQLite: set `SQLITE_PATH`, or mount at `/data/` and let the default resolution pick it up.

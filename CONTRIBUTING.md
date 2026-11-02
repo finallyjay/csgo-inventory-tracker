@@ -18,7 +18,7 @@ cp .env.example .env
 pnpm dev          # http://localhost:3000
 ```
 
-This project uses Node 24 (see `.nvmrc`) and pnpm 11. At minimum you'll need a
+This project uses Node 26 (see `.nvmrc`) and pnpm 11. At minimum you'll need a
 Steam Web API key (`STEAM_API_KEY` in `.env` — see `.env.example` for the full
 list of variables and what they do) to exercise the Steam OpenID login flow
 locally.
